@@ -9,9 +9,12 @@ import {
     LogoutOutlined,
     SettingOutlined,
     BellOutlined,
-    QuestionCircleOutlined
+    QuestionCircleOutlined,
+    SunOutlined,
+    MoonOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { Text } = Typography;
 
@@ -25,6 +28,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const [collapsed, setCollapsed] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
+    const { theme, toggleTheme } = useTheme();
 
     const menuItems = [
         {
@@ -116,14 +120,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 left: 0,
                 right: 0,
                 height: '64px',
-                background: '#fff',
-                borderBottom: '1px solid #f0f0f0',
+                background: 'var(--header-bg)',
+                borderBottom: '1px solid var(--border-color)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '0 24px',
                 zIndex: 1000,
-                boxShadow: '0 2px 8px 0 rgba(29,35,41,.05)'
+                boxShadow: 'var(--shadow)'
             }}>
                 {/* 左侧：应用标题和菜单按钮 */}
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -135,16 +139,34 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     />
                     <h2 style={{
                         margin: 0,
-                        color: '#1890ff',
+                        color: 'var(--primary-color)',
                         fontSize: '20px',
                         fontWeight: 600
                     }}>
-                        候选人管理系统
+                        JianLi Tanuki (简狸) 🦝
                     </h2>
                 </div>
 
                 {/* 右侧：个人中心功能区 */}
                 <Space size="middle">
+                    {/* 主题切换按钮 */}
+                    <Button
+                        type="text"
+                        icon={theme === 'light' ? <MoonOutlined /> : <SunOutlined />}
+                        onClick={toggleTheme}
+                        style={{
+                            fontSize: '16px',
+                            width: 40,
+                            height: 40,
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: theme === 'light' ? '#1890ff' : '#faad14'
+                        }}
+                        title={theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'}
+                    />
+
                     {/* 通知按钮 */}
                     <Button
                         type="text"
@@ -209,7 +231,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                                     fontSize: '12px',
                                     lineHeight: '16px'
                                 }}>
-                                    猎头顾问
+                                    Cute help, smart hire.
                                 </Text>
                             </div>
                         </div>
@@ -227,8 +249,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     left: 0,
                     top: '64px',
                     height: 'calc(100vh - 64px)',
-                    background: '#fff',
-                    boxShadow: '2px 0 8px 0 rgba(29,35,41,.05)',
+                    background: 'var(--sidebar-bg)',
+                    boxShadow: 'var(--shadow)',
                     zIndex: 999
                 }}
             >
@@ -247,14 +269,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 marginTop: '64px',
                 padding: '24px',
                 minHeight: 'calc(100vh - 64px)',
-                background: '#f5f5f5',
+                background: 'var(--bg-secondary)',
                 transition: 'margin-left 0.2s'
             }}>
                 <div style={{
-                    background: '#fff',
+                    background: 'var(--card-bg)',
                     borderRadius: '8px',
                     minHeight: 'calc(100vh - 112px)',
-                    padding: '24px'
+                    padding: '24px',
+                    boxShadow: 'var(--shadow)'
                 }}>
                     {children}
                 </div>

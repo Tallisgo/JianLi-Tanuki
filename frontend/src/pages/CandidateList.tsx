@@ -183,6 +183,7 @@ const CandidateList: React.FC = () => {
                 <Button
                     type="link"
                     onClick={() => navigate(`/candidates/${record.id}`)}
+                    style={{ color: 'var(--primary-color)', fontWeight: 500 }}
                 >
                     {text}
                 </Button>
@@ -193,8 +194,8 @@ const CandidateList: React.FC = () => {
             key: 'contact',
             render: (record: Candidate) => (
                 <div>
-                    <div>{record.phone}</div>
-                    <div style={{ fontSize: '12px', color: '#666' }}>{record.email}</div>
+                    <div style={{ color: 'var(--text-primary)' }}>{record.phone}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{record.email}</div>
                 </div>
             ),
         },
@@ -202,40 +203,113 @@ const CandidateList: React.FC = () => {
             title: '职位',
             dataIndex: 'position',
             key: 'position',
+            render: (text: string) => (
+                <span style={{ color: 'var(--text-primary)' }}>{text || '未提供'}</span>
+            ),
         },
         {
             title: '经验',
             dataIndex: 'experience',
             key: 'experience',
+            render: (text: string) => (
+                <span style={{ color: 'var(--text-primary)' }}>{text || '未提供'}</span>
+            ),
         },
         {
             title: '技能',
             dataIndex: 'skills',
             key: 'skills',
-            render: (skills: string[]) => (
-                <div>
-                    {skills.slice(0, 2).map(skill => (
-                        <Tag key={skill}>{skill}</Tag>
-                    ))}
-                    {skills.length > 2 && <Tag>+{skills.length - 2}</Tag>}
-                </div>
-            ),
+            render: (skills: string[]) => {
+                const skillColors = ['var(--accent-blue)', 'var(--accent-green)', 'var(--accent-purple)', 'var(--accent-orange)', 'var(--accent-cyan)'];
+
+                return (
+                    <div>
+                        {skills.slice(0, 2).map((skill, index) => (
+                            <Tag
+                                key={skill}
+                                style={{
+                                    backgroundColor: skillColors[index % skillColors.length],
+                                    color: '#fff',
+                                    border: 'none',
+                                    fontSize: '11px'
+                                }}
+                            >
+                                {skill}
+                            </Tag>
+                        ))}
+                        {skills.length > 2 && (
+                            <Tag style={{
+                                backgroundColor: 'var(--bg-tertiary)',
+                                color: 'var(--text-secondary)',
+                                border: '1px solid var(--border-color)',
+                                fontSize: '11px'
+                            }}>
+                                +{skills.length - 2}
+                            </Tag>
+                        )}
+                    </div>
+                );
+            },
         },
         {
             title: '状态',
             dataIndex: 'status',
             key: 'status',
             render: (status: string) => {
-                const color = status === '已面试' ? 'green' :
-                    status === '待面试' ? 'orange' :
-                        status === '初筛通过' ? 'blue' : 'default';
-                return <Tag color={color}>{status}</Tag>;
+                let color = 'default';
+                let style: React.CSSProperties = {};
+
+                switch (status) {
+                    case '已面试':
+                        color = 'green';
+                        style = {
+                            backgroundColor: 'var(--success-color)',
+                            color: '#fff',
+                            border: 'none'
+                        };
+                        break;
+                    case '待面试':
+                        color = 'orange';
+                        style = {
+                            backgroundColor: 'var(--warning-color)',
+                            color: '#fff',
+                            border: 'none'
+                        };
+                        break;
+                    case '初筛通过':
+                        color = 'blue';
+                        style = {
+                            backgroundColor: 'var(--accent-blue)',
+                            color: '#fff',
+                            border: 'none'
+                        };
+                        break;
+                    case '已录用':
+                        color = 'purple';
+                        style = {
+                            backgroundColor: 'var(--accent-purple)',
+                            color: '#fff',
+                            border: 'none'
+                        };
+                        break;
+                    default:
+                        style = {
+                            backgroundColor: 'var(--bg-tertiary)',
+                            color: 'var(--text-secondary)',
+                            border: '1px solid var(--border-color)'
+                        };
+                }
+
+                return <Tag color={color} style={style}>{status}</Tag>;
             },
         },
         {
             title: '上传时间',
             dataIndex: 'uploadTime',
             key: 'uploadTime',
+            render: (text: string) => (
+                <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{text || '未知'}</span>
+            ),
         },
         {
             title: '操作',
@@ -246,16 +320,19 @@ const CandidateList: React.FC = () => {
                         type="text"
                         icon={<EyeOutlined />}
                         onClick={() => navigate(`/candidates/${record.id}`)}
+                        style={{ color: 'var(--primary-color)' }}
                     />
                     <Button
                         type="text"
                         icon={<EditOutlined />}
                         onClick={() => handleEdit(record)}
+                        style={{ color: 'var(--primary-color)' }}
                     />
                     <Button
                         type="text"
                         icon={<DownloadOutlined />}
                         onClick={() => handleDownload(record)}
+                        style={{ color: 'var(--primary-color)' }}
                     />
                     <Button
                         type="text"
@@ -267,6 +344,7 @@ const CandidateList: React.FC = () => {
                             console.log('删除按钮点击事件触发', record);
                             handleDelete(record);
                         }}
+                        style={{ color: 'var(--error-color)' }}
                     />
                 </Space>
             ),
@@ -287,32 +365,119 @@ const CandidateList: React.FC = () => {
     });
 
     return (
-        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+            height: 'calc(100vh - 64px)',
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: 'var(--bg-secondary)'
+        }}>
             {/* 搜索和操作区域 */}
-            <Card size="small" style={{ marginBottom: '12px', flex: '0 0 auto' }}>
+            <Card
+                size="small"
+                style={{
+                    marginBottom: '12px',
+                    flex: '0 0 auto',
+                    backgroundColor: 'var(--card-bg)',
+                    borderColor: 'var(--border-color)',
+                    boxShadow: 'var(--shadow)'
+                }}
+            >
                 <Row gutter={[12, 8]}>
                     <Col xs={24} sm={12} md={8}>
                         <Input
-                            placeholder="搜索姓名、职位或技能"
-                            prefix={<SearchOutlined />}
+                            placeholder="搜索筛选 - 姓名、职位或技能"
+                            prefix={<SearchOutlined style={{ color: 'var(--text-secondary)' }} />}
                             value={searchText}
                             onChange={(e) => setSearchText(e.target.value)}
                             size="small"
+                            style={{
+                                backgroundColor: 'var(--bg-primary)',
+                                color: 'var(--text-primary)',
+                                borderColor: 'var(--border-color)'
+                            }}
                         />
                     </Col>
                     <Col xs={24} sm={12} md={4}>
                         <Select
                             placeholder="状态筛选"
-                            style={{ width: '100%' }}
+                            style={{
+                                width: '100%',
+                                backgroundColor: 'var(--bg-primary)',
+                                color: 'var(--text-primary)'
+                            }}
                             value={statusFilter}
                             onChange={setStatusFilter}
                             allowClear
                             size="small"
+                            dropdownStyle={{
+                                backgroundColor: 'var(--card-bg)',
+                                borderColor: 'var(--border-color)',
+                                boxShadow: 'var(--shadow)',
+                                color: 'var(--text-primary)'
+                            }}
+                            optionFilterProp="children"
+                            getPopupContainer={(triggerNode) => triggerNode.parentNode}
+                            virtual={false}
+                            dropdownRender={(menu) => (
+                                <div style={{
+                                    backgroundColor: 'var(--card-bg)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '6px',
+                                    boxShadow: 'var(--shadow)'
+                                }}>
+                                    {menu}
+                                </div>
+                            )}
+                            className="status-filter-select"
                         >
-                            <Option value="初筛通过">初筛通过</Option>
-                            <Option value="待面试">待面试</Option>
-                            <Option value="已面试">已面试</Option>
-                            <Option value="已录用">已录用</Option>
+                            <Option
+                                value="初筛通过"
+                                style={{
+                                    backgroundColor: 'var(--card-bg)',
+                                    color: 'var(--text-primary)',
+                                    opacity: 1,
+                                    visibility: 'visible',
+                                    display: 'block'
+                                }}
+                            >
+                                <span style={{ color: 'var(--text-primary)' }}>初筛通过</span>
+                            </Option>
+                            <Option
+                                value="待面试"
+                                style={{
+                                    backgroundColor: 'var(--card-bg)',
+                                    color: 'var(--text-primary)',
+                                    opacity: 1,
+                                    visibility: 'visible',
+                                    display: 'block'
+                                }}
+                            >
+                                <span style={{ color: 'var(--text-primary)' }}>待面试</span>
+                            </Option>
+                            <Option
+                                value="已面试"
+                                style={{
+                                    backgroundColor: 'var(--card-bg)',
+                                    color: 'var(--text-primary)',
+                                    opacity: 1,
+                                    visibility: 'visible',
+                                    display: 'block'
+                                }}
+                            >
+                                <span style={{ color: 'var(--text-primary)' }}>已面试</span>
+                            </Option>
+                            <Option
+                                value="已录用"
+                                style={{
+                                    backgroundColor: 'var(--card-bg)',
+                                    color: 'var(--text-primary)',
+                                    opacity: 1,
+                                    visibility: 'visible',
+                                    display: 'block'
+                                }}
+                            >
+                                <span style={{ color: 'var(--text-primary)' }}>已录用</span>
+                            </Option>
                         </Select>
                     </Col>
                     <Col xs={24} sm={24} md={12}>
@@ -354,7 +519,13 @@ const CandidateList: React.FC = () => {
             {/* 表格区域 */}
             <Card
                 size="small"
-                style={{ flex: '1 1 auto', overflow: 'hidden' }}
+                style={{
+                    flex: '1 1 auto',
+                    overflow: 'hidden',
+                    backgroundColor: 'var(--card-bg)',
+                    borderColor: 'var(--border-color)',
+                    boxShadow: 'var(--shadow)'
+                }}
                 bodyStyle={{ padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' }}
             >
                 <Spin spinning={loading}>
@@ -373,6 +544,19 @@ const CandidateList: React.FC = () => {
                             showTotal: (total, range) =>
                                 `第 ${range[0]}-${range[1]} 条/共 ${total} 条`,
                             size: 'small',
+                            style: {
+                                marginTop: '16px',
+                                textAlign: 'center'
+                            },
+                            itemRender: (_, type, originalElement) => {
+                                if (type === 'prev') {
+                                    return <Button size="small" style={{ color: 'var(--text-primary)' }}>上一页</Button>;
+                                }
+                                if (type === 'next') {
+                                    return <Button size="small" style={{ color: 'var(--text-primary)' }}>下一页</Button>;
+                                }
+                                return originalElement;
+                            }
                         }}
                     />
                 </Spin>

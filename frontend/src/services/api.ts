@@ -53,6 +53,13 @@ export interface TaskResponse {
     completed_at?: string;
 }
 
+export interface InspirationResponse {
+    inspiration: string;
+    date: string;
+    timestamp: string;
+    refreshed?: boolean;
+}
+
 class ApiService {
     /**
      * 获取所有任务（候选人）
@@ -208,6 +215,47 @@ class ApiService {
         const end = endDate || '至今';
 
         return `${start} - ${end}`;
+    }
+
+    /**
+     * 获取每日激励语
+     */
+    async getDailyInspiration(): Promise<InspirationResponse | null> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/inspiration/daily`);
+            if (!response.ok) {
+                throw new Error('获取激励语失败');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('获取激励语失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 刷新今日激励语
+     */
+    async refreshDailyInspiration(): Promise<InspirationResponse | null> {
+        try {
+            console.log('API调用: 刷新激励语');
+            const response = await fetch(`${API_BASE_URL}/inspiration/refresh`);
+            console.log('API响应状态:', response.status);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API错误响应:', errorText);
+                throw new Error(`刷新激励语失败: ${response.status} ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log('API返回数据:', data);
+            return data;
+        } catch (error) {
+            console.error('刷新激励语失败:', error);
+            throw error; // 重新抛出错误，让组件处理
+        }
     }
 }
 
