@@ -1,4 +1,4 @@
-# JianLi Tanuki 🦝
+# JianLi Tanuki (简狸) 🦝
 
 > **Cute help, smart hire.**  
 
