@@ -42,8 +42,8 @@ const layoutStyles = {
         minHeight: 0
     },
     leftPanel: {
-        flex: '0 0 40%',
-        minWidth: '350px',
+        flex: '0 0 25%',
+        minWidth: '250px',
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '12px'
@@ -167,10 +167,13 @@ const UploadResume: React.FC = () => {
             setUploadTasks(prev =>
                 prev.map(task =>
                     task.id === taskId
-                        ? { ...task, status: 'uploading', progress: 0 }
+                        ? { ...task, status: 'uploading', progress: 10 }
                         : task
                 )
             );
+
+            // 更新选中任务状态
+            setSelectedTask(prev => prev && prev.id === taskId ? { ...prev, status: 'uploading', progress: 10 } : prev);
 
             const uploadResult = await uploadToBackend(file);
             const backendTaskId = uploadResult.task_id;
@@ -179,10 +182,13 @@ const UploadResume: React.FC = () => {
             setUploadTasks(prev =>
                 prev.map(task =>
                     task.id === taskId
-                        ? { ...task, id: backendTaskId, status: 'parsing', progress: 0 }
+                        ? { ...task, id: backendTaskId, status: 'parsing', progress: 30 }
                         : task
                 )
             );
+
+            // 更新选中任务状态
+            setSelectedTask(prev => prev && prev.id === taskId ? { ...prev, id: backendTaskId, status: 'parsing', progress: 30 } : prev);
 
             // 轮询检查任务状态
             const pollStatus = async () => {
@@ -204,18 +210,36 @@ const UploadResume: React.FC = () => {
                         )
                     );
 
+                    // 更新选中任务的状态（如果当前选中的是这个任务）
+                    setSelectedTask(prev => {
+                        if (prev && (prev.id === backendTaskId || prev.id === taskId)) {
+                            return {
+                                ...prev,
+                                id: backendTaskId,
+                                status: statusResult.status,
+                                progress: statusResult.progress || 0,
+                                result: statusResult.result,
+                                error: statusResult.error
+                            };
+                        }
+                        return prev;
+                    });
+
                     if (statusResult.status === 'completed') {
                         message.success(`${file.name} 解析成功！`);
                         return;
                     } else if (statusResult.status === 'failed') {
                         message.error(`${file.name} 解析失败: ${statusResult.error}`);
                         return;
+                    } else if (statusResult.status === 'parsing') {
+                        // 解析中状态，显示进度提示
+                        message.loading(`${file.name} 正在解析中...`, 1);
                     } else if (statusResult.status === 'uploaded' || statusResult.status === 'parsing') {
-                        // 继续轮询
-                        setTimeout(pollStatus, 2000);
+                        // 继续轮询，缩短轮询间隔
+                        setTimeout(pollStatus, 1500);
                     } else {
                         // 其他状态也继续轮询
-                        setTimeout(pollStatus, 2000);
+                        setTimeout(pollStatus, 1500);
                     }
                 } catch (error) {
                     console.error('检查任务状态失败:', error);
@@ -231,12 +255,25 @@ const UploadResume: React.FC = () => {
                                 : task
                         )
                     );
+
+                    // 更新选中任务的状态
+                    setSelectedTask(prev => {
+                        if (prev && (prev.id === backendTaskId || prev.id === taskId)) {
+                            return {
+                                ...prev,
+                                status: 'error',
+                                error: '检查任务状态失败'
+                            };
+                        }
+                        return prev;
+                    });
+
                     message.error(`${file.name} 解析失败！`);
                 }
             };
 
-            // 开始轮询
-            setTimeout(pollStatus, 1000);
+            // 开始轮询，缩短初始延迟
+            setTimeout(pollStatus, 500);
 
         } catch (error) {
             console.error('上传失败:', error);
@@ -247,11 +284,17 @@ const UploadResume: React.FC = () => {
                             ...task,
                             status: 'error',
                             error: error instanceof Error ? error.message : '上传失败'
-                            // fileObject 会自动保留
                         }
                         : task
                 )
             );
+
+            setSelectedTask(prev => prev && prev.id === taskId ? {
+                ...prev,
+                status: 'error',
+                error: error instanceof Error ? error.message : '上传失败'
+            } : prev);
+
             message.error(`${file.name} 上传失败！`);
         }
     };
@@ -259,41 +302,25 @@ const UploadResume: React.FC = () => {
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'uploading':
-            case 'parsing':
                 return <ClockCircleOutlined style={{ color: '#1890ff' }} />;
-            case 'success':
+            case 'parsing':
+                return <ClockCircleOutlined style={{ color: '#faad14' }} />;
+            case 'completed':
                 return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
+            case 'failed':
             case 'error':
                 return <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />;
             default:
-                return <FileTextOutlined />;
-        }
-    };
-
-    const getStatusText = (status: string) => {
-        switch (status) {
-            case 'uploading':
-                return '上传中';
-            case 'uploaded':
-                return '已上传';
-            case 'parsing':
-                return '解析中';
-            case 'completed':
-                return '解析成功';
-            case 'failed':
-            case 'error':
-                return '解析失败';
-            default:
-                return status || '未知状态';
+                return <FileTextOutlined style={{ color: '#d9d9d9' }} />;
         }
     };
 
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'uploading':
-            case 'uploaded':
-            case 'parsing':
                 return 'processing';
+            case 'parsing':
+                return 'warning';
             case 'completed':
                 return 'success';
             case 'failed':
@@ -304,6 +331,22 @@ const UploadResume: React.FC = () => {
         }
     };
 
+    const getStatusText = (status: string) => {
+        switch (status) {
+            case 'uploading':
+                return '上传中';
+            case 'parsing':
+                return '解析中';
+            case 'completed':
+                return '已完成';
+            case 'failed':
+                return '解析失败';
+            case 'error':
+                return '上传失败';
+            default:
+                return '未知状态';
+        }
+    };
 
     // 简历文件预览组件
     const ResumePreview: React.FC<{ task: UploadTask }> = ({ task }) => {
@@ -311,11 +354,11 @@ const UploadResume: React.FC = () => {
         React.useEffect(() => {
             return () => {
                 if (task.fileObject) {
-                    const fileUrl = URL.createObjectURL(task.fileObject);
-                    URL.revokeObjectURL(fileUrl);
+                    URL.revokeObjectURL(URL.createObjectURL(task.fileObject));
                 }
             };
         }, [task.fileObject]);
+
         const getFileType = (fileName: string) => {
             const extension = fileName.split('.').pop()?.toLowerCase();
             return extension;
@@ -325,35 +368,36 @@ const UploadResume: React.FC = () => {
             const fileType = getFileType(fileName);
             switch (fileType) {
                 case 'pdf':
-                    return <FileTextOutlined style={{ color: '#ff4d4f' }} />;
+                    return <FileTextOutlined style={{ fontSize: '24px', color: '#ff4d4f' }} />;
                 case 'doc':
                 case 'docx':
-                    return <FileTextOutlined style={{ color: '#1890ff' }} />;
+                    return <FileTextOutlined style={{ fontSize: '24px', color: '#1890ff' }} />;
                 case 'jpg':
                 case 'jpeg':
                 case 'png':
-                    return <FileTextOutlined style={{ color: '#52c41a' }} />;
+                    return <FileTextOutlined style={{ fontSize: '24px', color: '#52c41a' }} />;
                 default:
-                    return <FileTextOutlined />;
+                    return <FileTextOutlined style={{ fontSize: '24px', color: '#d9d9d9' }} />;
             }
         };
 
         const renderFilePreview = () => {
             const fileType = getFileType(task.fileName);
 
-            // 优先使用本地文件对象进行预览
+            // 如果有本地文件对象，优先使用本地预览
             if (task.fileObject) {
                 const fileUrl = URL.createObjectURL(task.fileObject);
 
                 switch (fileType) {
                     case 'pdf':
                         return (
-                            <div style={{ height: '100%', width: '100%' }}>
+                            <div style={{ height: '100%', width: '100%', minHeight: '500px' }}>
                                 <iframe
                                     src={fileUrl}
                                     style={{
                                         width: '100%',
                                         height: '100%',
+                                        minHeight: '500px',
                                         border: 'none',
                                         borderRadius: '6px'
                                     }}
@@ -394,62 +438,14 @@ const UploadResume: React.FC = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                flexDirection: 'column',
                                 backgroundColor: '#f5f5f5',
                                 borderRadius: '6px'
                             }}>
                                 <div style={{ textAlign: 'center' }}>
                                     {getFileIcon(task.fileName)}
                                     <div style={{ marginTop: '16px' }}>
-                                        <Title level={4}>Word 文档</Title>
-                                        <Text type="secondary">浏览器不支持直接预览 Word 文档</Text>
-                                        <br />
-                                        <Text type="secondary">请下载后使用 Microsoft Word 打开</Text>
-                                    </div>
-                                    <div style={{ marginTop: '16px' }}>
-                                        <a
-                                            href={fileUrl}
-                                            download={task.fileName}
-                                            style={{
-                                                color: '#1890ff',
-                                                textDecoration: 'none'
-                                            }}
-                                        >
-                                            <FileTextOutlined /> 下载文件
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-
-                    default:
-                        return (
-                            <div style={{
-                                height: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexDirection: 'column',
-                                backgroundColor: '#f5f5f5',
-                                borderRadius: '6px'
-                            }}>
-                                <div style={{ textAlign: 'center' }}>
-                                    {getFileIcon(task.fileName)}
-                                    <div style={{ marginTop: '16px' }}>
-                                        <Title level={4}>不支持预览</Title>
-                                        <Text type="secondary">该文件类型暂不支持在线预览</Text>
-                                    </div>
-                                    <div style={{ marginTop: '16px' }}>
-                                        <a
-                                            href={fileUrl}
-                                            download={task.fileName}
-                                            style={{
-                                                color: '#1890ff',
-                                                textDecoration: 'none'
-                                            }}
-                                        >
-                                            <FileTextOutlined /> 下载文件
-                                        </a>
+                                        <Title level={4}>Word文档预览</Title>
+                                        <Text type="secondary">Word文档暂不支持在线预览</Text>
                                     </div>
                                 </div>
                             </div>
@@ -462,12 +458,13 @@ const UploadResume: React.FC = () => {
                 switch (fileType) {
                     case 'pdf':
                         return (
-                            <div style={{ height: '100%', width: '100%' }}>
+                            <div style={{ height: '100%', width: '100%', minHeight: '500px' }}>
                                 <iframe
                                     src={`http://localhost:8001/api/v1/upload/download/${task.id}`}
                                     style={{
                                         width: '100%',
                                         height: '100%',
+                                        minHeight: '500px',
                                         border: 'none',
                                         borderRadius: '6px'
                                     }}
@@ -525,45 +522,38 @@ const UploadResume: React.FC = () => {
         };
 
         return (
-            <div style={{ padding: '8px' }}>
-                {/* 文件信息 */}
-                <Card size="small" style={{ marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {getFileIcon(task.fileName)}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <Text
-                                strong
-                                style={{
-                                    fontSize: '12px',
-                                    maxWidth: '180px',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    display: 'block'
-                                }}
-                                title={task.fileName}
-                            >
-                                {task.fileName}
-                            </Text>
-                            <Text
-                                type="secondary"
-                                style={{
-                                    fontSize: '10px',
-                                    display: 'block',
-                                    marginTop: '2px'
-                                }}
-                            >
-                                文件类型: {getFileType(task.fileName)?.toUpperCase()}
-                            </Text>
-                        </div>
-                        <Tag color={getStatusColor(task.status)} style={{ fontSize: '9px' }}>
-                            {getStatusText(task.status)}
-                        </Tag>
+            <div style={{ padding: '4px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                {/* 文件信息 - 简化显示 */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: '#f5f5f5',
+                    borderRadius: '4px',
+                    marginBottom: '8px',
+                    flex: '0 0 auto'
+                }}>
+                    {getFileIcon(task.fileName)}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                            strong
+                            style={{
+                                fontSize: '14px',
+                                color: 'var(--text-primary)'
+                            }}
+                            title={task.fileName}
+                        >
+                            {task.fileName}
+                        </Text>
                     </div>
-                </Card>
+                    <Tag color={getStatusColor(task.status)} style={{ fontSize: '10px' }}>
+                        {getStatusText(task.status)}
+                    </Tag>
+                </div>
 
-                {/* 文件预览 */}
-                <div style={{ height: '100%', overflow: 'auto' }}>
+                {/* 文件预览 - 占据剩余空间 */}
+                <div style={{ flex: '1 1 auto', overflow: 'auto' }}>
                     {renderFilePreview()}
                 </div>
             </div>
@@ -571,10 +561,13 @@ const UploadResume: React.FC = () => {
     };
 
     return (
-        <div style={layoutStyles.container}>
+        <div style={{
+            ...layoutStyles.container,
+            backgroundColor: 'var(--bg-secondary)'
+        }}>
             {/* 页面标题 */}
             <div style={layoutStyles.header}>
-                <Title level={2} style={{ margin: 0 }}>简历上传与解析</Title>
+                <Title level={2} style={{ margin: 0, color: 'var(--text-primary)' }}>JianLi Tanuki (简狸) - 简历上传与解析</Title>
             </div>
 
             {/* 主要内容区域 - 两列布局 */}
@@ -585,10 +578,10 @@ const UploadResume: React.FC = () => {
                     <Card title="上传简历文件" size="small" style={{ flex: '0 0 auto' }}>
                         <Dragger {...uploadProps} disabled={uploading} style={{ minHeight: '120px' }}>
                             <p className="ant-upload-drag-icon">
-                                <InboxOutlined style={{ fontSize: '32px' }} />
+                                <InboxOutlined style={{ fontSize: '32px', color: 'var(--primary-color)' }} />
                             </p>
-                            <p className="ant-upload-text" style={{ fontSize: '16px' }}>点击或拖拽文件上传</p>
-                            <p className="ant-upload-hint" style={{ fontSize: '14px' }}>
+                            <p className="ant-upload-text" style={{ fontSize: '16px', color: 'var(--text-primary)' }}>点击或拖拽文件上传</p>
+                            <p className="ant-upload-hint" style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
                                 支持 PDF、Word、图片格式，最大 10MB
                             </p>
                         </Dragger>
@@ -600,7 +593,7 @@ const UploadResume: React.FC = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 {getStatusIcon(selectedTask.status)}
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <Text strong style={{ fontSize: '14px', display: 'block' }} title={selectedTask.fileName}>
+                                    <Text strong style={{ fontSize: '14px', display: 'block', color: 'var(--text-primary)' }} title={selectedTask.fileName}>
                                         {selectedTask.fileName}
                                     </Text>
                                     <Tag color={getStatusColor(selectedTask.status)} style={{ marginTop: '4px' }}>
@@ -620,33 +613,6 @@ const UploadResume: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* 操作按钮 */}
-                            {selectedTask.status === 'completed' && (
-                                <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                                    <Button
-                                        type="primary"
-                                        size="small"
-                                        icon={<FileTextOutlined />}
-                                        onClick={() => {
-                                            const link = document.createElement('a');
-                                            link.href = `http://localhost:8001/api/v1/upload/download/${selectedTask.id}`;
-                                            link.download = selectedTask.fileName;
-                                            link.click();
-                                        }}
-                                    >
-                                        下载
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        icon={<CheckCircleOutlined />}
-                                        onClick={() => {
-                                            console.log('查看详细信息', selectedTask);
-                                        }}
-                                    >
-                                        详情
-                                    </Button>
-                                </div>
-                            )}
 
                             {selectedTask.status === 'error' && (
                                 <div style={{ marginTop: '12px' }}>
@@ -676,10 +642,9 @@ const UploadResume: React.FC = () => {
                                         <List.Item
                                             style={{
                                                 cursor: 'pointer',
-                                                backgroundColor: selectedTask?.id === task.id ? '#f0f8ff' : 'transparent',
+                                                backgroundColor: selectedTask?.id === task.id ? 'var(--primary-color-light)' : 'transparent',
                                                 borderRadius: '4px',
-                                                padding: '8px',
-                                                margin: '2px 0'
+                                                padding: '8px'
                                             }}
                                             onClick={() => setSelectedTask(task)}
                                         >
@@ -689,11 +654,12 @@ const UploadResume: React.FC = () => {
                                                     <Text
                                                         style={{
                                                             fontSize: '12px',
-                                                            maxWidth: '200px',
+                                                            maxWidth: '150px',
                                                             overflow: 'hidden',
                                                             textOverflow: 'ellipsis',
                                                             whiteSpace: 'nowrap',
-                                                            display: 'block'
+                                                            display: 'block',
+                                                            color: 'var(--text-primary)'
                                                         }}
                                                         title={task.fileName}
                                                     >
@@ -720,7 +686,7 @@ const UploadResume: React.FC = () => {
                     <Card
                         title="文件预览"
                         size="small"
-                        style={{ flex: '1 1 auto', overflow: 'hidden' }}
+                        style={{ flex: '1 1 auto', overflow: 'hidden', minHeight: '80vh' }}
                         bodyStyle={{ padding: 0, height: 'calc(100% - 57px)', overflow: 'auto' }}
                     >
                         {selectedTask ? (
@@ -737,9 +703,9 @@ const UploadResume: React.FC = () => {
                                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                                     description={
                                         <div>
-                                            <Text type="secondary" style={{ fontSize: '16px' }}>请上传简历文件</Text>
+                                            <Text type="secondary" style={{ fontSize: '16px', color: 'var(--text-secondary)' }}>请上传简历文件</Text>
                                             <br />
-                                            <Text type="secondary" style={{ fontSize: '14px' }}>
+                                            <Text type="secondary" style={{ fontSize: '14px', color: 'var(--text-tertiary)' }}>
                                                 上传后即可预览内容和解析结果
                                             </Text>
                                         </div>
@@ -748,90 +714,6 @@ const UploadResume: React.FC = () => {
                             </div>
                         )}
                     </Card>
-
-                    {/* 解析结果 */}
-                    {selectedTask && selectedTask.status === 'completed' && selectedTask.result && (
-                        <Card
-                            title="解析结果"
-                            size="small"
-                            style={{ flex: '0 0 300px', overflow: 'hidden' }}
-                            bodyStyle={{ padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' }}
-                        >
-                            <div style={{ maxHeight: '100%', overflow: 'auto' }}>
-                                {/* 基本信息 */}
-                                <div style={{ marginBottom: '16px' }}>
-                                    <Text strong style={{ fontSize: '14px' }}>基本信息</Text>
-                                    <div style={{ marginTop: '8px' }}>
-                                        {selectedTask.result.name && (
-                                            <div style={{ marginBottom: '4px' }}>
-                                                <Text style={{ fontSize: '13px' }}>姓名: {selectedTask.result.name}</Text>
-                                            </div>
-                                        )}
-                                        {selectedTask.result.contact?.phone && (
-                                            <div style={{ marginBottom: '4px' }}>
-                                                <Text style={{ fontSize: '13px' }}>电话: {selectedTask.result.contact.phone}</Text>
-                                            </div>
-                                        )}
-                                        {selectedTask.result.contact?.email && (
-                                            <div style={{ marginBottom: '4px' }}>
-                                                <Text style={{ fontSize: '13px' }}>邮箱: {selectedTask.result.contact.email}</Text>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* 工作经历 */}
-                                {selectedTask.result.experience && selectedTask.result.experience.length > 0 && (
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <Text strong style={{ fontSize: '14px' }}>工作经历</Text>
-                                        <div style={{ marginTop: '8px' }}>
-                                            {selectedTask.result.experience.slice(0, 2).map((exp: any, index: number) => (
-                                                <div key={index} style={{ marginBottom: '8px', padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-                                                    <Text strong style={{ fontSize: '13px' }}>{exp.title}</Text>
-                                                    <br />
-                                                    <Text style={{ fontSize: '12px' }}>{exp.company}</Text>
-                                                    <br />
-                                                    <Text type="secondary" style={{ fontSize: '11px' }}>
-                                                        {exp.start_date} - {exp.end_date || '至今'}
-                                                    </Text>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* 技能标签 */}
-                                {selectedTask.result.skills && selectedTask.result.skills.length > 0 && (
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <Text strong style={{ fontSize: '14px' }}>技能标签</Text>
-                                        <div style={{ marginTop: '8px' }}>
-                                            {selectedTask.result.skills.slice(0, 8).map((skill: string, index: number) => (
-                                                <Tag key={index} style={{ marginBottom: '4px', fontSize: '11px', padding: '2px 6px' }}>
-                                                    {skill}
-                                                </Tag>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* 教育背景 */}
-                                {selectedTask.result.education && selectedTask.result.education.length > 0 && (
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <Text strong style={{ fontSize: '14px' }}>教育背景</Text>
-                                        <div style={{ marginTop: '8px' }}>
-                                            {selectedTask.result.education.slice(0, 1).map((edu: any, index: number) => (
-                                                <div key={index} style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-                                                    <Text strong style={{ fontSize: '13px' }}>{edu.institution}</Text>
-                                                    <br />
-                                                    <Text style={{ fontSize: '12px' }}>{edu.degree} · {edu.major}</Text>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </Card>
-                    )}
                 </div>
             </div>
         </div>

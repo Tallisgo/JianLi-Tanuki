@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { apiService, type Candidate } from '../services/api';
+import InspirationCard from '../components/InspirationCard';
 
 const { Title, Text } = Typography;
 
@@ -174,7 +175,7 @@ const Dashboard: React.FC = () => {
                 marginBottom: '16px',
                 padding: '0 4px'
             }}>
-                <Title level={2} style={{ margin: 0 }}>仪表板</Title>
+                <Title level={2} style={{ margin: 0, color: 'var(--text-primary)' }}>JianLi Tanuki (简狸) 仪表板</Title>
                 <Space>
                     <Button
                         type="primary"
@@ -192,8 +193,15 @@ const Dashboard: React.FC = () => {
                 </Space>
             </div>
 
+            {/* 激励语区域 */}
+            <Row gutter={[12, 12]} style={{ marginBottom: '16px' }}>
+                <Col span={24}>
+                    <InspirationCard />
+                </Col>
+            </Row>
+
             {/* 主要内容区域 - 三列布局 */}
-            <Row gutter={[12, 12]} style={{ height: 'calc(100vh - 140px)' }}>
+            <Row gutter={[12, 12]} style={{ height: 'calc(100vh - 240px)' }}>
                 {/* 左侧：统计卡片和热门技能 */}
                 <Col xs={24} lg={8}>
                     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

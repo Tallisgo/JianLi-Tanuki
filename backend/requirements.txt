@@ -1,3 +1,6 @@
+# JianLi Tanuki (简狸) - 智能简历解析系统后端依赖
+# Cute help, smart hire.
+
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
