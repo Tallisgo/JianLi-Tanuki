@@ -96,15 +96,11 @@ const CandidateList: React.FC = () => {
     const deleteCandidate = async (id: string, name: string) => {
         try {
             console.log('开始删除候选人', id);
-            const success = await apiService.deleteCandidate(id);
-            console.log('删除结果', success);
+            await apiService.deleteCandidate(id);
+            console.log('删除成功');
 
-            if (success) {
-                message.success(`候选人 ${name} 删除成功`);
-                loadCandidates(); // 重新加载数据
-            } else {
-                message.error('删除失败，请重试');
-            }
+            message.success(`候选人 ${name} 删除成功`);
+            loadCandidates(); // 重新加载数据
         } catch (error) {
             console.error('删除错误', error);
             message.error('删除失败，请检查网络连接');
@@ -114,12 +110,8 @@ const CandidateList: React.FC = () => {
     // 处理下载
     const handleDownload = async (record: Candidate) => {
         try {
-            const success = await apiService.downloadResume(record.id, `${record.name}_简历.pdf`);
-            if (success) {
-                message.success('简历下载成功');
-            } else {
-                message.error('简历下载失败');
-            }
+            await apiService.downloadResume(record.id);
+            message.success('简历下载成功');
         } catch (error) {
             message.error('简历下载失败');
         }
@@ -150,14 +142,20 @@ const CandidateList: React.FC = () => {
         try {
             console.log('开始批量删除候选人', ids);
 
-            const deletePromises = ids.map(id =>
-                apiService.deleteCandidate(id as string)
-            );
+            const deletePromises = ids.map(async (id) => {
+                try {
+                    await apiService.deleteCandidate(id as string);
+                    return { success: true, id };
+                } catch (error) {
+                    console.error(`删除候选人 ${id} 失败:`, error);
+                    return { success: false, id };
+                }
+            });
 
             const results = await Promise.all(deletePromises);
             console.log('批量删除结果', results);
 
-            const successCount = results.filter(result => result).length;
+            const successCount = results.filter(result => result.success).length;
             const failCount = results.length - successCount;
 
             if (failCount === 0) {
@@ -179,15 +177,29 @@ const CandidateList: React.FC = () => {
             title: '姓名',
             dataIndex: 'name',
             key: 'name',
-            render: (text: string, record: Candidate) => (
-                <Button
-                    type="link"
-                    onClick={() => navigate(`/candidates/${record.id}`)}
-                    style={{ color: 'var(--primary-color)', fontWeight: 500 }}
-                >
-                    {text}
-                </Button>
-            ),
+            render: (text: string, record: Candidate) => {
+                // 只有有效的ID才允许导航
+                const hasValidId = record.id && !record.id.startsWith('candidate-');
+                return (
+                    <Button
+                        type="link"
+                        onClick={() => {
+                            if (hasValidId) {
+                                navigate(`/candidates/${record.id}`);
+                            } else {
+                                message.warning('该候选人数据不完整，无法查看详情');
+                            }
+                        }}
+                        style={{
+                            color: hasValidId ? 'var(--primary-color)' : '#999',
+                            fontWeight: 500,
+                            cursor: hasValidId ? 'pointer' : 'not-allowed'
+                        }}
+                    >
+                        {text}
+                    </Button>
+                );
+            },
         },
         {
             title: '联系方式',
@@ -201,19 +213,13 @@ const CandidateList: React.FC = () => {
         },
         {
             title: '职位',
-            dataIndex: 'position',
             key: 'position',
-            render: (text: string) => (
-                <span style={{ color: 'var(--text-primary)' }}>{text || '未提供'}</span>
-            ),
-        },
-        {
-            title: '经验',
-            dataIndex: 'experience',
-            key: 'experience',
-            render: (text: string) => (
-                <span style={{ color: 'var(--text-primary)' }}>{text || '未提供'}</span>
-            ),
+            render: (record: Candidate) => {
+                const position = typeof record.position === 'string' ? record.position : '未提供';
+                return (
+                    <span style={{ color: 'var(--text-primary)' }}>{position}</span>
+                );
+            },
         },
         {
             title: '教育背景',
@@ -224,11 +230,11 @@ const CandidateList: React.FC = () => {
 
                     // 格式化时间显示
                     const formatTimeRange = () => {
-                        if (latestEdu.start_year && latestEdu.end_year) {
+                        if (typeof latestEdu.start_year === 'string' && typeof latestEdu.end_year === 'string') {
                             return `${latestEdu.start_year} - ${latestEdu.end_year}`;
-                        } else if (latestEdu.start_year) {
+                        } else if (typeof latestEdu.start_year === 'string') {
                             return latestEdu.start_year;
-                        } else if (latestEdu.end_year) {
+                        } else if (typeof latestEdu.end_year === 'string') {
                             return latestEdu.end_year;
                         }
                         return null;
@@ -239,10 +245,11 @@ const CandidateList: React.FC = () => {
                     return (
                         <div>
                             <div style={{ color: 'var(--text-primary)' }}>
-                                {latestEdu.institution}
+                                {typeof latestEdu.institution === 'string' ? latestEdu.institution : '未知学校'}
                             </div>
                             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                {latestEdu.major || latestEdu.degree}
+                                {typeof latestEdu.major === 'string' ? latestEdu.major :
+                                    typeof latestEdu.degree === 'string' ? latestEdu.degree : '未知专业'}
                             </div>
                             {timeRange && (
                                 <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
@@ -252,9 +259,10 @@ const CandidateList: React.FC = () => {
                         </div>
                     );
                 }
+                const education = typeof record.education === 'string' ? record.education : '未提供';
                 return (
                     <span style={{ color: 'var(--text-primary)' }}>
-                        {record.education || '未提供'}
+                        {education}
                     </span>
                 );
             },
@@ -297,9 +305,9 @@ const CandidateList: React.FC = () => {
         },
         {
             title: '状态',
-            dataIndex: 'status',
             key: 'status',
-            render: (status: string) => {
+            render: (record: Candidate) => {
+                const status = typeof record.status === 'string' ? record.status : '未知';
                 let color = 'default';
                 let style: React.CSSProperties = {};
 
@@ -349,49 +357,88 @@ const CandidateList: React.FC = () => {
         },
         {
             title: '上传时间',
-            dataIndex: 'uploadTime',
             key: 'uploadTime',
-            render: (text: string) => (
-                <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{text || '未知'}</span>
-            ),
+            render: (record: Candidate) => {
+                const uploadTime = typeof record.uploadTime === 'string' ? record.uploadTime : '未知';
+                return (
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{uploadTime}</span>
+                );
+            },
         },
         {
             title: '操作',
             key: 'action',
-            render: (record: Candidate) => (
-                <Space size="small">
-                    <Button
-                        type="text"
-                        icon={<EyeOutlined />}
-                        onClick={() => navigate(`/candidates/${record.id}`)}
-                        style={{ color: 'var(--primary-color)' }}
-                    />
-                    <Button
-                        type="text"
-                        icon={<EditOutlined />}
-                        onClick={() => handleEdit(record)}
-                        style={{ color: 'var(--primary-color)' }}
-                    />
-                    <Button
-                        type="text"
-                        icon={<DownloadOutlined />}
-                        onClick={() => handleDownload(record)}
-                        style={{ color: 'var(--primary-color)' }}
-                    />
-                    <Button
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('删除按钮点击事件触发', record);
-                            handleDelete(record);
-                        }}
-                        style={{ color: 'var(--error-color)' }}
-                    />
-                </Space>
-            ),
+            render: (record: Candidate) => {
+                const hasValidId = record.id && !record.id.startsWith('candidate-');
+                return (
+                    <Space size="small">
+                        <Button
+                            type="text"
+                            icon={<EyeOutlined />}
+                            onClick={() => {
+                                if (hasValidId) {
+                                    navigate(`/candidates/${record.id}`);
+                                } else {
+                                    message.warning('该候选人数据不完整，无法查看详情');
+                                }
+                            }}
+                            style={{
+                                color: hasValidId ? 'var(--primary-color)' : '#999',
+                                cursor: hasValidId ? 'pointer' : 'not-allowed'
+                            }}
+                        />
+                        <Button
+                            type="text"
+                            icon={<EditOutlined />}
+                            onClick={() => {
+                                if (hasValidId) {
+                                    handleEdit(record);
+                                } else {
+                                    message.warning('该候选人数据不完整，无法编辑');
+                                }
+                            }}
+                            style={{
+                                color: hasValidId ? 'var(--primary-color)' : '#999',
+                                cursor: hasValidId ? 'pointer' : 'not-allowed'
+                            }}
+                        />
+                        <Button
+                            type="text"
+                            icon={<DownloadOutlined />}
+                            onClick={() => {
+                                if (hasValidId) {
+                                    handleDownload(record);
+                                } else {
+                                    message.warning('该候选人数据不完整，无法下载');
+                                }
+                            }}
+                            style={{
+                                color: hasValidId ? 'var(--primary-color)' : '#999',
+                                cursor: hasValidId ? 'pointer' : 'not-allowed'
+                            }}
+                        />
+                        <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (hasValidId) {
+                                    console.log('删除按钮点击事件触发', record);
+                                    handleDelete(record);
+                                } else {
+                                    message.warning('该候选人数据不完整，无法删除');
+                                }
+                            }}
+                            style={{
+                                color: hasValidId ? 'var(--error-color)' : '#999',
+                                cursor: hasValidId ? 'pointer' : 'not-allowed'
+                            }}
+                        />
+                    </Space>
+                );
+            },
         },
     ];
 
@@ -406,7 +453,11 @@ const CandidateList: React.FC = () => {
             (candidate.skills && candidate.skills.some(skill => skill.includes(searchText)));
         const matchesStatus = !statusFilter || candidate.status === statusFilter;
         return matchesSearch && matchesStatus;
-    });
+    }).map((candidate, index) => ({
+        ...candidate,
+        // 保持原始ID，但为Table的rowKey提供备用方案
+        _tableKey: candidate.id || `candidate-${index}`, // 仅用于Table的rowKey
+    }));
 
     return (
         <div style={{
@@ -453,16 +504,20 @@ const CandidateList: React.FC = () => {
                             onChange={setStatusFilter}
                             allowClear
                             size="small"
-                            dropdownStyle={{
-                                backgroundColor: 'var(--card-bg)',
-                                borderColor: 'var(--border-color)',
-                                boxShadow: 'var(--shadow)',
-                                color: 'var(--text-primary)'
+                            styles={{
+                                popup: {
+                                    root: {
+                                        backgroundColor: 'var(--card-bg)',
+                                        borderColor: 'var(--border-color)',
+                                        boxShadow: 'var(--shadow)',
+                                        color: 'var(--text-primary)'
+                                    }
+                                }
                             }}
                             optionFilterProp="children"
                             getPopupContainer={(triggerNode) => triggerNode.parentNode}
                             virtual={false}
-                            dropdownRender={(menu) => (
+                            popupRender={(menu) => (
                                 <div style={{
                                     backgroundColor: 'var(--card-bg)',
                                     border: '1px solid var(--border-color)',
@@ -570,14 +625,14 @@ const CandidateList: React.FC = () => {
                     borderColor: 'var(--border-color)',
                     boxShadow: 'var(--shadow)'
                 }}
-                bodyStyle={{ padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' }}
+                styles={{ body: { padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' } }}
             >
                 <Spin spinning={loading}>
                     <Table
                         columns={columns}
                         dataSource={filteredCandidates}
                         rowSelection={rowSelection}
-                        rowKey="id"
+                        rowKey={(record) => record._tableKey || record.id || `candidate-${record.name || 'unknown'}`}
                         size="small"
                         scroll={{ y: 'calc(100vh - 200px)' }}
                         pagination={{

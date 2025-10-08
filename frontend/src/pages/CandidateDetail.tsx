@@ -73,12 +73,8 @@ const CandidateDetail: React.FC = () => {
         if (!candidate) return;
 
         try {
-            const success = await apiService.downloadResume(candidate.id, `${candidate.name}_简历.pdf`);
-            if (success) {
-                message.success('简历下载成功');
-            } else {
-                message.error('简历下载失败');
-            }
+            await apiService.downloadResume(candidate.id);
+            message.success('简历下载成功');
         } catch (error) {
             message.error('简历下载失败');
         }
@@ -233,33 +229,53 @@ const CandidateDetail: React.FC = () => {
                                     {candidate.workExperience
                                         .sort((a, b) => {
                                             // 按时间排序，从最近的开始
-                                            // 提取开始年份进行比较
-                                            const getStartYear = (duration: string) => {
-                                                const match = duration.match(/(\d{4})/);
-                                                return match ? parseInt(match[1]) : 0;
+                                            const getStartYear = (work: any) => {
+                                                if (work.start_date) {
+                                                    const match = work.start_date.match(/(\d{4})/);
+                                                    return match ? parseInt(match[1]) : 0;
+                                                }
+                                                return 0;
                                             };
 
-                                            const yearA = getStartYear(a.duration);
-                                            const yearB = getStartYear(b.duration);
+                                            const yearA = getStartYear(a);
+                                            const yearB = getStartYear(b);
 
                                             // 降序排列（最新的在前）
                                             return yearB - yearA;
                                         })
-                                        .map((work, index) => (
-                                            <Timeline.Item key={index}>
-                                                <div>
-                                                    <Title level={5} style={{ margin: 0, fontSize: '14px' }}>
-                                                        {work.position} - {work.company}
-                                                    </Title>
-                                                    <Paragraph style={{ color: '#666', margin: '4px 0', fontSize: '12px' }}>
-                                                        <CalendarOutlined style={{ fontSize: '11px' }} /> {work.duration}
-                                                    </Paragraph>
-                                                    <Paragraph style={{ margin: 0, fontSize: '12px', lineHeight: '1.6' }}>
-                                                        {work.description}
-                                                    </Paragraph>
-                                                </div>
-                                            </Timeline.Item>
-                                        ))}
+                                        .map((work, index) => {
+                                            const formatDuration = (startDate?: string, endDate?: string) => {
+                                                if (!startDate) return '未知时间';
+                                                const start = new Date(startDate);
+                                                const end = endDate ? new Date(endDate) : new Date();
+
+                                                const startStr = start.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit' });
+                                                const endStr = endDate ? end.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit' }) : '至今';
+
+                                                return `${startStr} - ${endStr}`;
+                                            };
+
+                                            return (
+                                                <Timeline.Item key={`work-${index}`}>
+                                                    <div>
+                                                        <Title level={5} style={{ margin: 0, fontSize: '14px' }}>
+                                                            {work.position || '未知职位'} - {work.company || '未知公司'}
+                                                        </Title>
+                                                        <Paragraph style={{ color: '#666', margin: '4px 0', fontSize: '12px' }}>
+                                                            <CalendarOutlined style={{ fontSize: '11px' }} /> {formatDuration(work.start_date, work.end_date)}
+                                                        </Paragraph>
+                                                        <Paragraph style={{ margin: 0, fontSize: '12px', lineHeight: '1.6' }}>
+                                                            {work.description || '暂无描述'}
+                                                        </Paragraph>
+                                                        {work.location && (
+                                                            <Paragraph style={{ color: '#999', margin: '4px 0 0 0', fontSize: '11px' }}>
+                                                                <EnvironmentOutlined style={{ fontSize: '10px' }} /> {work.location}
+                                                            </Paragraph>
+                                                        )}
+                                                    </div>
+                                                </Timeline.Item>
+                                            );
+                                        })}
                                 </Timeline>
                             ) : (
                                 <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
@@ -284,20 +300,22 @@ const CandidateDetail: React.FC = () => {
                                             return 0;
                                         })
                                         .map((project, index) => (
-                                            <div key={index} style={{ marginBottom: '16px' }}>
+                                            <div key={`project-${index}`} style={{ marginBottom: '16px' }}>
                                                 <Title level={5} style={{ margin: 0, fontSize: '14px' }}>
-                                                    {project.name}
+                                                    {project.name || '未知项目'}
                                                 </Title>
                                                 <Paragraph style={{ margin: '6px 0', fontSize: '12px', lineHeight: '1.6' }}>
-                                                    {project.description}
+                                                    {project.description || '暂无描述'}
                                                 </Paragraph>
-                                                <div style={{ marginTop: '8px' }}>
-                                                    {project.technologies.map(tech => (
-                                                        <Tag key={tech} style={{ marginBottom: '4px', fontSize: '10px' }}>
-                                                            {tech}
-                                                        </Tag>
-                                                    ))}
-                                                </div>
+                                                {project.technologies && project.technologies.length > 0 && (
+                                                    <div style={{ marginTop: '8px' }}>
+                                                        {project.technologies.map((tech, techIndex) => (
+                                                            <Tag key={`tech-${index}-${techIndex}`} style={{ marginBottom: '4px', fontSize: '10px' }}>
+                                                                {tech}
+                                                            </Tag>
+                                                        ))}
+                                                    </div>
+                                                )}
                                                 {index < (candidate.projects?.length || 0) - 1 && <Divider style={{ margin: '12px 0' }} />}
                                             </div>
                                         ))}

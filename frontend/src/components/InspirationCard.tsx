@@ -313,22 +313,24 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ style }) => {
                     transform: isAnimating ? 'scale(1.02)' : 'scale(1)',
                     ...style
                 }}
-                headStyle={{
-                    background: isAnimating
-                        ? 'rgba(255, 255, 255, 0.15)'
-                        : 'rgba(255, 255, 255, 0.1)',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.3)',
-                    color: 'white',
-                    padding: '12px 16px',
-                    transition: 'all 0.3s ease-in-out'
-                }}
-                bodyStyle={{
-                    padding: '16px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    minHeight: '120px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center'
+                styles={{
+                    header: {
+                        background: isAnimating
+                            ? 'rgba(255, 255, 255, 0.15)'
+                            : 'rgba(255, 255, 255, 0.1)',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.3)',
+                        color: 'white',
+                        padding: '12px 16px',
+                        transition: 'all 0.3s ease-in-out'
+                    },
+                    body: {
+                        padding: '16px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        minHeight: '120px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                    }
                 }}
                 extra={
                     <Space size="small">

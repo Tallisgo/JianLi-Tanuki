@@ -8,12 +8,10 @@ import {
     Row,
     Col,
     Card,
-    Divider,
-    Space,
     message
 } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import type { Candidate, WorkExperience, Project } from '../services/api';
+import type { Candidate } from '../services/api';
 
 const { Option } = Select;
 const { TextArea } = Input;
