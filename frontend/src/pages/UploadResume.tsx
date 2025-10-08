@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getUploadUrl, getTaskStatusUrl, getFileDownloadUrl } from '../config/api';
 import {
     Upload,
     message,
@@ -138,7 +139,7 @@ const UploadResume: React.FC = () => {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('http://localhost:8001/api/v1/upload/', {
+        const response = await fetch(getUploadUrl(), {
             method: 'POST',
             body: formData,
         });
@@ -152,7 +153,7 @@ const UploadResume: React.FC = () => {
     };
 
     const checkTaskStatus = async (taskId: string): Promise<any> => {
-        const response = await fetch(`http://localhost:8001/api/v1/tasks/${taskId}`);
+        const response = await fetch(getTaskStatusUrl(taskId));
 
         if (!response.ok) {
             throw new Error('获取任务状态失败');
@@ -460,7 +461,7 @@ const UploadResume: React.FC = () => {
                         return (
                             <div style={{ height: '100%', width: '100%', minHeight: '500px' }}>
                                 <iframe
-                                    src={`http://localhost:8001/api/v1/upload/download/${task.id}`}
+                                    src={getFileDownloadUrl(task.id)}
                                     style={{
                                         width: '100%',
                                         height: '100%',
@@ -486,7 +487,7 @@ const UploadResume: React.FC = () => {
                                 borderRadius: '6px'
                             }}>
                                 <img
-                                    src={`http://localhost:8001/api/v1/upload/download/${task.id}`}
+                                    src={getFileDownloadUrl(task.id)}
                                     alt={`图片预览 - ${task.fileName}`}
                                     style={{
                                         maxWidth: '100%',

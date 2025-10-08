@@ -1,7 +1,7 @@
 /**
  * API服务
  */
-const API_BASE_URL = 'http://localhost:8001/api/v1';
+import { API_BASE_URL, getAuthUrls, getInspirationUrl, getRefreshInspirationUrl } from '../config/api';
 
 export interface Candidate {
     id: string;
@@ -68,6 +68,45 @@ export interface InspirationResponse {
     date: string;
     timestamp: string;
     refreshed?: boolean;
+}
+
+// 用户相关接口
+export interface User {
+    id: number;
+    username: string;
+    email: string;
+    full_name?: string;
+    avatar?: string;
+    phone?: string;
+    role: string;
+    status: string;
+    last_login?: string;
+    login_count: number;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface AuthResponse {
+    success: boolean;
+    message: string;
+    user?: User;
+    access_token?: string;
+    refresh_token?: string;
+    token_type?: string;
+    expires_in?: number;
+}
+
+export interface LoginRequest {
+    username_or_email: string;
+    password: string;
+}
+
+export interface RegisterRequest {
+    username: string;
+    email: string;
+    password: string;
+    full_name?: string;
+    phone?: string;
 }
 
 class ApiService {
@@ -233,7 +272,7 @@ class ApiService {
      */
     async getDailyInspiration(): Promise<InspirationResponse | null> {
         try {
-            const response = await fetch(`${API_BASE_URL}/inspiration/daily`);
+            const response = await fetch(getInspirationUrl());
             if (!response.ok) {
                 throw new Error('获取激励语失败');
             }
@@ -251,7 +290,7 @@ class ApiService {
     async refreshDailyInspiration(): Promise<InspirationResponse | null> {
         try {
             console.log('API调用: 刷新激励语');
-            const response = await fetch(`${API_BASE_URL}/inspiration/refresh`);
+            const response = await fetch(getRefreshInspirationUrl());
             console.log('API响应状态:', response.status);
 
             if (!response.ok) {
@@ -267,6 +306,263 @@ class ApiService {
             console.error('刷新激励语失败:', error);
             throw error; // 重新抛出错误，让组件处理
         }
+    }
+
+    // ==================== 用户认证相关方法 ====================
+
+    /**
+     * 用户登录
+     */
+    async login(request: LoginRequest): Promise<AuthResponse> {
+        try {
+            const response = await fetch(getAuthUrls().login, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(request),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '登录失败');
+            }
+
+            const data: AuthResponse = await response.json();
+
+            // 保存令牌到本地存储
+            if (data.access_token) {
+                localStorage.setItem('access_token', data.access_token);
+            }
+            if (data.refresh_token) {
+                localStorage.setItem('refresh_token', data.refresh_token);
+            }
+            if (data.user) {
+                localStorage.setItem('user', JSON.stringify(data.user));
+            }
+
+            return data;
+        } catch (error) {
+            console.error('登录失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 用户注册
+     */
+    async register(request: RegisterRequest): Promise<AuthResponse> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(request),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '注册失败');
+            }
+
+            const data: AuthResponse = await response.json();
+            return data;
+        } catch (error) {
+            console.error('注册失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 获取当前用户信息
+     */
+    async getCurrentUser(): Promise<User | null> {
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                return null;
+            }
+
+            const response = await fetch(`${API_BASE_URL}/auth/me`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                // 如果令牌无效，清除本地存储
+                if (response.status === 401) {
+                    this.logout();
+                }
+                return null;
+            }
+
+            const data = await response.json();
+            return data.user;
+        } catch (error) {
+            console.error('获取用户信息失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 刷新访问令牌
+     */
+    async refreshToken(): Promise<boolean> {
+        try {
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) {
+                return false;
+            }
+
+            const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ refresh_token: refreshToken }),
+            });
+
+            if (!response.ok) {
+                return false;
+            }
+
+            const data: AuthResponse = await response.json();
+
+            if (data.access_token) {
+                localStorage.setItem('access_token', data.access_token);
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            console.error('刷新令牌失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 用户登出
+     */
+    async logout(): Promise<void> {
+        try {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                await fetch(`${API_BASE_URL}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+            }
+        } catch (error) {
+            console.error('登出请求失败:', error);
+        } finally {
+            // 清除本地存储
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+        }
+    }
+
+    /**
+     * 更新用户资料
+     */
+    async updateProfile(profileData: Partial<User>): Promise<User> {
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                throw new Error('未登录');
+            }
+
+            const response = await fetch(`${API_BASE_URL}/auth/me`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify(profileData),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '更新资料失败');
+            }
+
+            const data = await response.json();
+
+            // 更新本地存储的用户信息
+            if (data.user) {
+                localStorage.setItem('user', JSON.stringify(data.user));
+            }
+
+            return data.user;
+        } catch (error) {
+            console.error('更新资料失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 修改密码
+     */
+    async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                throw new Error('未登录');
+            }
+
+            const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    old_password: oldPassword,
+                    new_password: newPassword,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '修改密码失败');
+            }
+        } catch (error) {
+            console.error('修改密码失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 检查是否已登录
+     */
+    isAuthenticated(): boolean {
+        const token = localStorage.getItem('access_token');
+        const user = localStorage.getItem('user');
+        return !!(token && user);
+    }
+
+    /**
+     * 获取存储的用户信息
+     */
+    getStoredUser(): User | null {
+        try {
+            const userStr = localStorage.getItem('user');
+            return userStr ? JSON.parse(userStr) : null;
+        } catch (error) {
+            console.error('解析用户信息失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 获取访问令牌
+     */
+    getAccessToken(): string | null {
+        return localStorage.getItem('access_token');
     }
 }
 
