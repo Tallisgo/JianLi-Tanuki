@@ -216,6 +216,50 @@ const CandidateList: React.FC = () => {
             ),
         },
         {
+            title: '教育背景',
+            key: 'education',
+            render: (record: Candidate) => {
+                if (record.educationList && record.educationList.length > 0) {
+                    const latestEdu = record.educationList[0];
+
+                    // 格式化时间显示
+                    const formatTimeRange = () => {
+                        if (latestEdu.start_year && latestEdu.end_year) {
+                            return `${latestEdu.start_year} - ${latestEdu.end_year}`;
+                        } else if (latestEdu.start_year) {
+                            return latestEdu.start_year;
+                        } else if (latestEdu.end_year) {
+                            return latestEdu.end_year;
+                        }
+                        return null;
+                    };
+
+                    const timeRange = formatTimeRange();
+
+                    return (
+                        <div>
+                            <div style={{ color: 'var(--text-primary)' }}>
+                                {latestEdu.institution}
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                {latestEdu.major || latestEdu.degree}
+                            </div>
+                            {timeRange && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                                    {timeRange}
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
+                return (
+                    <span style={{ color: 'var(--text-primary)' }}>
+                        {record.education || '未提供'}
+                    </span>
+                );
+            },
+        },
+        {
             title: '技能',
             dataIndex: 'skills',
             key: 'skills',

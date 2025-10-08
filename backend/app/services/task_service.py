@@ -3,14 +3,14 @@
 """
 from typing import List, Optional
 from app.models.resume import UploadTask, TaskStatus
-from app.core.database import db_manager
+from app.services.database_service import db_service
 from app.services.file_service import FileService
 
 class TaskService:
     """任务管理服务类"""
     
     def __init__(self):
-        self.db = db_manager
+        self.db_service = db_service
         self.file_service = FileService()
     
     async def create_task(self, task: UploadTask) -> bool:
@@ -23,7 +23,7 @@ class TaskService:
         Returns:
             是否创建成功
         """
-        return self.db.save_task(task)
+        return self.db_service.create_task(task)
     
     async def get_task(self, task_id: str) -> Optional[UploadTask]:
         """
@@ -35,7 +35,7 @@ class TaskService:
         Returns:
             任务对象
         """
-        return self.db.get_task(task_id)
+        return self.db_service.get_task(task_id)
     
     async def get_all_tasks(self, limit: int = 100, offset: int = 0) -> List[UploadTask]:
         """
@@ -48,7 +48,7 @@ class TaskService:
         Returns:
             任务列表
         """
-        return self.db.get_all_tasks(limit=limit, offset=offset)
+        return self.db_service.get_all_tasks(limit=limit, offset=offset)
     
     async def update_task_status(self, task_id: str, status: TaskStatus, 
                                 progress: int = None, result=None, error: str = None) -> bool:
@@ -65,7 +65,7 @@ class TaskService:
         Returns:
             是否更新成功
         """
-        return self.db.update_task_status(task_id, status, progress, result, error)
+        return self.db_service.update_task_status(task_id, status, progress, result, error)
     
     async def delete_task(self, task_id: str) -> bool:
         """
@@ -86,8 +86,8 @@ class TaskService:
         if task.file_path:
             self.file_service.delete_file(task.file_path)
         
-        # 删除数据库记录
-        return self.db.delete_task(task_id)
+        # 删除数据库记录（包括相关的简历信息和候选人记录）
+        return self.db_service.delete_task(task_id)
     
     async def get_task_statistics(self) -> dict:
         """
@@ -96,17 +96,4 @@ class TaskService:
         Returns:
             统计信息字典
         """
-        tasks = await self.get_all_tasks(limit=1000)  # 获取更多任务用于统计
-        
-        total = len(tasks)
-        completed = len([t for t in tasks if t.status == TaskStatus.COMPLETED])
-        failed = len([t for t in tasks if t.status == TaskStatus.FAILED])
-        processing = len([t for t in tasks if t.status in [TaskStatus.UPLOADED, TaskStatus.PARSING]])
-        
-        return {
-            "total": total,
-            "completed": completed,
-            "failed": failed,
-            "processing": processing,
-            "success_rate": round(completed / total * 100, 2) if total > 0 else 0
-        }
+        return self.db_service.get_task_statistics()

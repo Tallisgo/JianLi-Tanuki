@@ -94,7 +94,8 @@ async def generate_inspiration_with_llm() -> str:
                 }
             ],
             "max_tokens": 200,
-            "temperature": 1.2  # 增加随机性和创造性
+            "temperature": settings.LLM_TEMPERATURE,  # 使用配置文件中的参数
+            "top_p": settings.LLM_TOP_P  # 添加top_p参数
         }
         
         headers = {

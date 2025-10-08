@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.api_v1.api import api_router
-from app.core.database import init_db
+from app.services.database_service import db_service
 
 def create_app() -> FastAPI:
     """创建FastAPI应用实例"""
@@ -43,7 +43,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         """应用启动时初始化"""
-        init_db()
+        db_service.init_database()
         print(f"🚀 {settings.PROJECT_NAME} v{settings.VERSION} 启动成功")
         print(f"📊 API文档: http://localhost:{settings.PORT}/docs")
     

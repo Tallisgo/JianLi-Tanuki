@@ -14,6 +14,7 @@ export interface Candidate {
     education?: string;
     school?: string;
     major?: string;
+    educationList?: EducationInfo[]; // 添加教育背景列表
     skills?: string[];
     workExperience?: WorkExperience[];
     projects?: Project[];
@@ -21,6 +22,15 @@ export interface Candidate {
     uploadTime: string;
     notes?: string;
     result?: any; // 解析结果
+}
+
+export interface EducationInfo {
+    degree?: string;
+    institution?: string;
+    major?: string;
+    start_year?: string;
+    end_year?: string;
+    gpa?: string;
 }
 
 export interface WorkExperience {
@@ -168,6 +178,7 @@ class ApiService {
             education: result.education?.[0]?.degree || '未知',
             school: result.education?.[0]?.institution,
             major: result.education?.[0]?.major,
+            educationList: result.education || [], // 添加完整教育背景列表
             skills: result.skills || [],
             workExperience: result.experience?.map((exp: any) => ({
                 company: exp.company || '未知公司',
