@@ -54,14 +54,15 @@ const Dashboard: React.FC = () => {
     }, []);
 
     // 获取最近候选人（最多4个）
-    const recentCandidates = candidates.slice(0, 4).map(candidate => ({
-        key: candidate.id,
-        name: candidate.name,
-        position: candidate.position || '未知职位',
-        experience: candidate.experience || '未知',
-        status: candidate.status,
-        uploadTime: candidate.uploadTime,
-        avatar: `https://api.dicebear.com/7.x/miniavs/svg?seed=${candidate.id}`,
+    const recentCandidates = candidates.slice(0, 4).map((candidate, index) => ({
+        key: candidate.id || `candidate-${index}`, // 确保有唯一的 key
+        id: candidate.id,
+        name: candidate.name || '未知姓名',
+        position: typeof candidate.position === 'string' ? candidate.position : '未知职位',
+        experience: typeof candidate.experience === 'string' ? candidate.experience : '未知',
+        status: typeof candidate.status === 'string' ? candidate.status : '未知',
+        uploadTime: candidate.uploadTime || '未知时间',
+        avatar: `https://api.dicebear.com/7.x/miniavs/svg?seed=${candidate.id || index}`,
     }));
 
     // 计算热门技能
@@ -130,15 +131,10 @@ const Dashboard: React.FC = () => {
             ),
         },
         {
-            title: '经验',
-            dataIndex: 'experience',
-            key: 'experience',
-        },
-        {
             title: '状态',
-            dataIndex: 'status',
             key: 'status',
-            render: (status: string) => {
+            render: (record: any) => {
+                const status = typeof record.status === 'string' ? record.status : '未知';
                 const color = status === '已面试' ? 'green' :
                     status === '待面试' ? 'orange' :
                         status === '已录用' ? 'blue' : 'default';
@@ -147,8 +143,10 @@ const Dashboard: React.FC = () => {
         },
         {
             title: '上传时间',
-            dataIndex: 'uploadTime',
             key: 'uploadTime',
+            render: (record: any) => (
+                <span>{typeof record.uploadTime === 'string' ? record.uploadTime : '未知时间'}</span>
+            ),
         },
         {
             title: '操作',
@@ -157,7 +155,7 @@ const Dashboard: React.FC = () => {
                 <Button
                     type="link"
                     icon={<EyeOutlined />}
-                    onClick={() => navigate(`/candidates/${record.key}`)}
+                    onClick={() => navigate(`/candidates/${record.id}`)}
                 >
                     查看
                 </Button>
@@ -254,14 +252,14 @@ const Dashboard: React.FC = () => {
                             title="热门技能"
                             size="small"
                             style={{ flex: '1 1 auto', overflow: 'hidden' }}
-                            bodyStyle={{ padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' }}
+                            styles={{ body: { padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' } }}
                         >
                             {topSkills.length > 0 ? (
                                 <List
                                     size="small"
                                     dataSource={topSkills}
-                                    renderItem={(skill) => (
-                                        <List.Item style={{ padding: '4px 0' }}>
+                                    renderItem={(skill, index) => (
+                                        <List.Item key={`skill-${index}`} style={{ padding: '4px 0' }}>
                                             <div style={{ width: '100%' }}>
                                                 <div style={{
                                                     display: 'flex',
@@ -301,12 +299,13 @@ const Dashboard: React.FC = () => {
                                 查看全部
                             </Button>
                         }
-                        bodyStyle={{ padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' }}
+                        styles={{ body: { padding: '12px', height: 'calc(100% - 57px)', overflow: 'auto' } }}
                     >
                         <Spin spinning={loading}>
                             <Table
                                 columns={columns}
                                 dataSource={recentCandidates}
+                                rowKey="key"
                                 pagination={false}
                                 size="small"
                                 scroll={{ y: 'calc(100vh - 300px)' }}
@@ -324,13 +323,13 @@ const Dashboard: React.FC = () => {
                             size="small"
                             style={{ flex: '0 0 auto', marginBottom: '12px' }}
                             extra={<Badge count={upcomingInterviews.length} size="small" />}
-                            bodyStyle={{ padding: '8px', maxHeight: '200px', overflow: 'auto' }}
+                            styles={{ body: { padding: '8px', maxHeight: '200px', overflow: 'auto' } }}
                         >
                             <List
                                 size="small"
                                 dataSource={upcomingInterviews}
-                                renderItem={(item) => (
-                                    <List.Item style={{ padding: '4px 0' }}>
+                                renderItem={(item, index) => (
+                                    <List.Item key={`interview-${index}`} style={{ padding: '4px 0' }}>
                                         <List.Item.Meta
                                             avatar={<Avatar icon={<CalendarOutlined />} size="small" />}
                                             title={<Text style={{ fontSize: '12px' }}>{item.name}</Text>}
@@ -355,13 +354,13 @@ const Dashboard: React.FC = () => {
                             title="月度统计"
                             size="small"
                             style={{ flex: '1 1 auto', overflow: 'hidden' }}
-                            bodyStyle={{ padding: '8px', height: 'calc(100% - 57px)', overflow: 'auto' }}
+                            styles={{ body: { padding: '8px', height: 'calc(100% - 57px)', overflow: 'auto' } }}
                         >
                             <List
                                 size="small"
                                 dataSource={monthlyStats}
-                                renderItem={(stat) => (
-                                    <List.Item style={{ padding: '4px 0' }}>
+                                renderItem={(stat, index) => (
+                                    <List.Item key={`stat-${index}`} style={{ padding: '4px 0' }}>
                                         <div style={{ width: '100%' }}>
                                             <div style={{
                                                 display: 'flex',

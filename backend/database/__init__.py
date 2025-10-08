@@ -7,7 +7,8 @@ from .migrations.migration_manager import MigrationManager
 from .repositories import (
     UploadTaskRepository,
     ResumeInfoRepository,
-    CandidateRepository
+    CandidateRepository,
+    UserRepository
 )
 
 # 创建全局实例
@@ -15,6 +16,7 @@ migration_manager = MigrationManager()
 upload_task_repo = UploadTaskRepository()
 resume_info_repo = ResumeInfoRepository()
 candidate_repo = CandidateRepository()
+user_repo = UserRepository()
 
 def init_database():
     """初始化数据库"""

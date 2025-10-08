@@ -1,7 +1,35 @@
 /**
  * API服务
  */
-import { API_BASE_URL, getAuthUrls, getInspirationUrl, getRefreshInspirationUrl } from '../config/api';
+
+// API配置函数
+const getApiBaseUrl = (): string => {
+    if (process.env.NODE_ENV === 'production') {
+        // 生产环境：使用当前访问的域名
+        return `${window.location.protocol}//${window.location.hostname}:8001/api/v1`;
+    } else {
+        // 开发环境：使用localhost
+        return 'http://localhost:8001/api/v1';
+    }
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+const getAuthUrls = () => ({
+    login: `${getApiBaseUrl()}/auth/login`,
+    register: `${getApiBaseUrl()}/auth/register`,
+    me: `${getApiBaseUrl()}/auth/me`,
+    refresh: `${getApiBaseUrl()}/auth/refresh`,
+    logout: `${getApiBaseUrl()}/auth/logout`,
+});
+
+const getInspirationUrl = (): string => {
+    return `${getApiBaseUrl()}/inspiration/daily`;
+};
+
+const getRefreshInspirationUrl = (): string => {
+    return `${getApiBaseUrl()}/inspiration/refresh`;
+};
 
 export interface Candidate {
     id: string;
@@ -28,72 +56,70 @@ export interface EducationInfo {
     degree?: string;
     institution?: string;
     major?: string;
+    start_date?: string;
+    end_date?: string;
     start_year?: string;
     end_year?: string;
+    location?: string;
     gpa?: string;
 }
 
 export interface WorkExperience {
-    company: string;
-    position: string;
-    duration: string;
-    description: string;
+    company?: string;
+    position?: string;
     start_date?: string;
     end_date?: string;
+    description?: string;
     location?: string;
 }
 
 export interface Project {
-    name: string;
-    description: string;
-    technologies: string[];
+    name?: string;
+    description?: string;
+    technologies?: string[];
     start_date?: string;
     end_date?: string;
 }
 
 export interface TaskResponse {
     task_id: string;
-    filename: string;
     status: string;
-    progress: number;
     result?: any;
-    error?: string;
     created_at: string;
-    updated_at?: string;
-    completed_at?: string;
+    updated_at: string;
+}
+
+export interface UploadResponse {
+    task_id: string;
+    message: string;
 }
 
 export interface InspirationResponse {
     inspiration: string;
     date: string;
     timestamp: string;
-    refreshed?: boolean;
+    source: string;
 }
 
-// 用户相关接口
 export interface User {
-    id: number;
+    id: string;
     username: string;
     email: string;
     full_name?: string;
-    avatar?: string;
     phone?: string;
     role: string;
     status: string;
-    last_login?: string;
-    login_count: number;
     created_at: string;
-    updated_at?: string;
+    updated_at: string;
 }
 
 export interface AuthResponse {
+    access_token: string;
+    refresh_token: string;
+    token_type: string;
+    user: User;
     success: boolean;
-    message: string;
-    user?: User;
-    access_token?: string;
-    refresh_token?: string;
-    token_type?: string;
-    expires_in?: number;
+    message?: string;
 }
 
 export interface LoginRequest {
@@ -143,11 +169,9 @@ class ApiService {
             }
 
             const task: TaskResponse = await response.json();
-
             if (task.status === 'completed' && task.result) {
                 return this.convertTaskToCandidate(task);
             }
-
             return null;
         } catch (error) {
             console.error('获取候选人详情失败:', error);
@@ -156,74 +180,37 @@ class ApiService {
     }
 
     /**
-     * 删除候选人
-     */
-    async deleteCandidate(id: string): Promise<boolean> {
-        try {
-            const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
-                method: 'DELETE',
-            });
-
-            return response.ok;
-        } catch (error) {
-            console.error('删除候选人失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 下载简历文件
-     */
-    async downloadResume(id: string, filename: string): Promise<boolean> {
-        try {
-            const response = await fetch(`${API_BASE_URL}/upload/download/${id}`);
-
-            if (!response.ok) {
-                throw new Error('下载失败');
-            }
-
-            // 创建下载链接
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-
-            return true;
-        } catch (error) {
-            console.error('下载简历失败:', error);
-            return false;
-        }
-    }
-
-    /**
      * 将任务转换为候选人格式
      */
     private convertTaskToCandidate(task: TaskResponse): Candidate {
         const result = task.result;
-
         return {
             id: task.task_id,
-            name: result.name || '未知',
+            name: result.name || '未知姓名',
             phone: result.contact?.phone,
             email: result.contact?.email,
             address: result.contact?.address,
-            position: result.experience?.[0]?.title || '未知',
-            experience: this.calculateExperience(result.experience),
-            education: result.education?.[0]?.degree || '未知',
-            school: result.education?.[0]?.institution,
-            major: result.education?.[0]?.major,
-            educationList: result.education || [], // 添加完整教育背景列表
+            position: result.experience?.[0]?.title || result.position,
+            experience: result.experience?.[0]?.description || result.experience,
+            education: result.education?.[0]?.institution || result.education,
+            school: result.education?.[0]?.institution || result.school,
+            major: result.education?.[0]?.major || result.major,
+            educationList: result.education?.map((edu: any) => ({
+                degree: edu.degree,
+                institution: edu.institution,
+                major: edu.major,
+                start_date: edu.start_date,
+                end_date: edu.end_date,
+                start_year: edu.start_year,
+                end_year: edu.end_year,
+                location: edu.location,
+                gpa: edu.gpa
+            })) || [],
             skills: result.skills || [],
             workExperience: result.experience?.map((exp: any) => ({
-                company: exp.company || '未知公司',
-                position: exp.title || '未知职位',
-                duration: this.formatDuration(exp.start_date, exp.end_date),
-                description: exp.description || '',
+                company: exp.company,
+                position: exp.title,
+                description: exp.description,
                 start_date: exp.start_date,
                 end_date: exp.end_date,
                 location: exp.location
@@ -242,30 +229,7 @@ class ApiService {
         };
     }
 
-    /**
-     * 计算工作经验
-     */
-    private calculateExperience(experience: any[]): string {
-        if (!experience || experience.length === 0) {
-            return '无';
-        }
 
-        // 简单的经验计算逻辑
-        const years = experience.length;
-        return `${years}年`;
-    }
-
-    /**
-     * 格式化工作期间
-     */
-    private formatDuration(startDate?: string, endDate?: string): string {
-        if (!startDate) return '未知';
-
-        const start = startDate;
-        const end = endDate || '至今';
-
-        return `${start} - ${end}`;
-    }
 
     /**
      * 获取每日激励语
@@ -300,7 +264,7 @@ class ApiService {
             }
 
             const data = await response.json();
-            console.log('API返回数据:', data);
+            console.log('API响应数据:', data);
             return data;
         } catch (error) {
             console.error('刷新激励语失败:', error);
@@ -353,7 +317,7 @@ class ApiService {
      */
     async register(request: RegisterRequest): Promise<AuthResponse> {
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/register`, {
+            const response = await fetch(getAuthUrls().register, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -367,6 +331,18 @@ class ApiService {
             }
 
             const data: AuthResponse = await response.json();
+
+            // 保存令牌到本地存储
+            if (data.access_token) {
+                localStorage.setItem('access_token', data.access_token);
+            }
+            if (data.refresh_token) {
+                localStorage.setItem('refresh_token', data.refresh_token);
+            }
+            if (data.user) {
+                localStorage.setItem('user', JSON.stringify(data.user));
+            }
+
             return data;
         } catch (error) {
             console.error('注册失败:', error);
@@ -379,23 +355,24 @@ class ApiService {
      */
     async getCurrentUser(): Promise<User | null> {
         try {
-            const token = localStorage.getItem('access_token');
+            const token = this.getAccessToken();
             if (!token) {
                 return null;
             }
 
-            const response = await fetch(`${API_BASE_URL}/auth/me`, {
+            const response = await fetch(getAuthUrls().me, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
             });
 
             if (!response.ok) {
-                // 如果令牌无效，清除本地存储
                 if (response.status === 401) {
-                    this.logout();
+                    // 令牌无效，尝试刷新
+                    await this.refreshToken();
+                    return this.getCurrentUser();
                 }
-                return null;
+                throw new Error('获取用户信息失败');
             }
 
             const data = await response.json();
@@ -416,7 +393,7 @@ class ApiService {
                 return false;
             }
 
-            const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+            const response = await fetch(getAuthUrls().refresh, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -425,16 +402,14 @@ class ApiService {
             });
 
             if (!response.ok) {
-                return false;
+                throw new Error('刷新令牌失败');
             }
 
-            const data: AuthResponse = await response.json();
-
+            const data = await response.json();
             if (data.access_token) {
                 localStorage.setItem('access_token', data.access_token);
                 return true;
             }
-
             return false;
         } catch (error) {
             console.error('刷新令牌失败:', error);
@@ -447,9 +422,9 @@ class ApiService {
      */
     async logout(): Promise<void> {
         try {
-            const token = localStorage.getItem('access_token');
+            const token = this.getAccessToken();
             if (token) {
-                await fetch(`${API_BASE_URL}/auth/logout`, {
+                await fetch(getAuthUrls().logout, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -469,37 +444,31 @@ class ApiService {
     /**
      * 更新用户资料
      */
-    async updateProfile(profileData: Partial<User>): Promise<User> {
+    async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
         try {
-            const token = localStorage.getItem('access_token');
+            const token = this.getAccessToken();
             if (!token) {
                 throw new Error('未登录');
             }
 
-            const response = await fetch(`${API_BASE_URL}/auth/me`, {
+            const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
                 },
-                body: JSON.stringify(profileData),
+                body: JSON.stringify(updates),
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.detail || '更新资料失败');
+                throw new Error(errorData.detail || '更新用户资料失败');
             }
 
             const data = await response.json();
-
-            // 更新本地存储的用户信息
-            if (data.user) {
-                localStorage.setItem('user', JSON.stringify(data.user));
-            }
-
             return data.user;
         } catch (error) {
-            console.error('更新资料失败:', error);
+            console.error('更新用户资料失败:', error);
             throw error;
         }
     }
@@ -509,7 +478,7 @@ class ApiService {
      */
     async changePassword(oldPassword: string, newPassword: string): Promise<void> {
         try {
-            const token = localStorage.getItem('access_token');
+            const token = this.getAccessToken();
             if (!token) {
                 throw new Error('未登录');
             }
@@ -536,13 +505,103 @@ class ApiService {
         }
     }
 
+    // ==================== 用户管理相关方法 ====================
+
+    /**
+     * 获取所有用户（管理员功能）
+     */
+    async getUsers(): Promise<User[]> {
+        try {
+            const token = this.getAccessToken();
+            if (!token) {
+                throw new Error('未登录');
+            }
+
+            const response = await fetch(`${API_BASE_URL}/users/`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '获取用户列表失败');
+            }
+
+            const data = await response.json();
+            return data.users || [];
+        } catch (error) {
+            console.error('获取用户列表失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 更新用户信息（管理员功能）
+     */
+    async updateUser(userId: string, updates: Partial<User>): Promise<User> {
+        try {
+            const token = this.getAccessToken();
+            if (!token) {
+                throw new Error('未登录');
+            }
+
+            const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify(updates),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '更新用户信息失败');
+            }
+
+            const data = await response.json();
+            return data.user;
+        } catch (error) {
+            console.error('更新用户信息失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 删除用户（管理员功能）
+     */
+    async deleteUser(userId: string): Promise<void> {
+        try {
+            const token = this.getAccessToken();
+            if (!token) {
+                throw new Error('未登录');
+            }
+
+            const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '删除用户失败');
+            }
+        } catch (error) {
+            console.error('删除用户失败:', error);
+            throw error;
+        }
+    }
+
+    // ==================== 工具方法 ====================
+
     /**
      * 检查是否已登录
      */
     isAuthenticated(): boolean {
-        const token = localStorage.getItem('access_token');
-        const user = localStorage.getItem('user');
-        return !!(token && user);
+        return !!this.getAccessToken();
     }
 
     /**
@@ -553,7 +612,7 @@ class ApiService {
             const userStr = localStorage.getItem('user');
             return userStr ? JSON.parse(userStr) : null;
         } catch (error) {
-            console.error('解析用户信息失败:', error);
+            console.error('获取存储用户信息失败:', error);
             return null;
         }
     }
@@ -564,6 +623,51 @@ class ApiService {
     getAccessToken(): string | null {
         return localStorage.getItem('access_token');
     }
+
+    /**
+     * 下载简历文件
+     */
+    async downloadResume(taskId: string): Promise<void> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/upload/download/${taskId}`);
+            if (!response.ok) {
+                throw new Error('下载简历失败');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resume_${taskId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('下载简历失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 删除候选人
+     */
+    async deleteCandidate(candidateId: string): Promise<void> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/tasks/${candidateId}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                throw new Error('删除候选人失败');
+            }
+        } catch (error) {
+            console.error('删除候选人失败:', error);
+            throw error;
+        }
+    }
 }
 
+// 创建并导出API服务实例
 export const apiService = new ApiService();
+export default apiService;

@@ -11,10 +11,13 @@ import {
     BellOutlined,
     QuestionCircleOutlined,
     SunOutlined,
-    MoonOutlined
+    MoonOutlined,
+    TeamOutlined,
+    CrownOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Text } = Typography;
 
@@ -29,6 +32,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { theme, toggleTheme } = useTheme();
+    const { user, logout } = useAuth();
 
     const menuItems = [
         {
@@ -46,6 +50,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             icon: <UploadOutlined />,
             label: '简历上传',
         },
+        ...(user?.role === 'admin' ? [{
+            key: '/users',
+            icon: <TeamOutlined />,
+            label: '用户管理',
+        }] : []),
     ];
 
     const userMenuItems = [
@@ -54,6 +63,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             icon: <UserOutlined />,
             label: '个人资料',
         },
+        ...(user?.role === 'admin' ? [{
+            key: 'users',
+            icon: <TeamOutlined />,
+            label: '用户管理',
+        }] : []),
         {
             key: 'settings',
             icon: <SettingOutlined />,
@@ -87,8 +101,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const handleUserMenuClick = ({ key }: { key: string }) => {
         switch (key) {
             case 'profile':
-                console.log('打开个人资料');
-                // 可以导航到个人资料页面
+                navigate('/profile');
+                break;
+            case 'users':
+                navigate('/users');
                 break;
             case 'settings':
                 console.log('打开系统设置');
@@ -99,12 +115,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 // 可以导航到通知页面
                 break;
             case 'help':
-                console.log('打开帮助中心');
-                // 可以导航到帮助页面
+                navigate('/help');
                 break;
             case 'logout':
-                console.log('退出登录');
-                // 处理退出登录逻辑
+                logout();
+                navigate('/login');
                 break;
             default:
                 break;
@@ -112,13 +127,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     };
 
     return (
-        <div style={{ minHeight: '100vh', position: 'relative' }}>
-            {/* 顶部导航栏 - 固定在页面顶部 */}
+        <div style={{
+            width: '100vw',
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+        }}>
+            {/* 顶部导航栏 */}
             <div style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
                 height: '64px',
                 background: 'var(--header-bg)',
                 borderBottom: '1px solid var(--border-color)',
@@ -127,7 +144,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 justifyContent: 'space-between',
                 padding: '0 24px',
                 zIndex: 1000,
-                boxShadow: 'var(--shadow)'
+                boxShadow: 'var(--shadow)',
+                flexShrink: 0
             }}>
                 {/* 左侧：应用标题和菜单按钮 */}
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -213,11 +231,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             <Avatar
                                 size="small"
                                 style={{
-                                    backgroundColor: '#1890ff',
+                                    backgroundColor: user?.role === 'admin' ? '#f5222d' : '#1890ff',
                                     marginRight: '8px'
                                 }}
                             >
-                                管
+                                {user?.role === 'admin' ? <CrownOutlined /> : <UserOutlined />}
                             </Avatar>
                             <div style={{ textAlign: 'left' }}>
                                 <div style={{
@@ -225,13 +243,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                                     fontWeight: 500,
                                     lineHeight: '20px'
                                 }}>
-                                    管理员
+                                    {user?.full_name || user?.username || '用户'}
                                 </div>
                                 <Text type="secondary" style={{
                                     fontSize: '12px',
                                     lineHeight: '16px'
                                 }}>
-                                    Cute help, smart hire.
+                                    {user?.role === 'admin' ? '管理员' : '普通用户'}
                                 </Text>
                             </div>
                         </div>
@@ -239,47 +257,53 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </Space>
             </div>
 
-            {/* 侧边栏 - 固定在左侧 */}
-            <Sider
-                trigger={null}
-                collapsible
-                collapsed={collapsed}
-                style={{
-                    position: 'fixed',
-                    left: 0,
-                    top: '64px',
-                    height: 'calc(100vh - 64px)',
-                    background: 'var(--sidebar-bg)',
-                    boxShadow: 'var(--shadow)',
-                    zIndex: 999
-                }}
-            >
-                <Menu
-                    mode="inline"
-                    selectedKeys={[location.pathname]}
-                    items={menuItems}
-                    onClick={handleMenuClick}
-                    style={{ borderRight: 0, marginTop: '16px' }}
-                />
-            </Sider>
-
-            {/* 主内容区域 */}
+            {/* 主体区域 */}
             <div style={{
-                marginLeft: collapsed ? '80px' : '200px',
-                marginTop: '64px',
-                padding: '24px',
-                minHeight: 'calc(100vh - 64px)',
-                background: 'var(--bg-secondary)',
-                transition: 'margin-left 0.2s'
+                display: 'flex',
+                flex: 1,
+                overflow: 'hidden'
             }}>
+                {/* 侧边栏 */}
+                <Sider
+                    trigger={null}
+                    collapsible
+                    collapsed={collapsed}
+                    style={{
+                        background: 'var(--sidebar-bg)',
+                        boxShadow: 'var(--shadow)',
+                        height: '100%'
+                    }}
+                >
+                    <Menu
+                        mode="inline"
+                        selectedKeys={[location.pathname]}
+                        items={menuItems}
+                        onClick={handleMenuClick}
+                        style={{
+                            borderRight: 0,
+                            marginTop: '16px',
+                            height: '100%'
+                        }}
+                    />
+                </Sider>
+
+                {/* 主内容区域 */}
                 <div style={{
-                    background: 'var(--card-bg)',
-                    borderRadius: '8px',
-                    minHeight: 'calc(100vh - 112px)',
+                    flex: 1,
                     padding: '24px',
-                    boxShadow: 'var(--shadow)'
+                    background: 'var(--bg-secondary)',
+                    overflow: 'auto',
+                    height: '100%'
                 }}>
-                    {children}
+                    <div style={{
+                        background: 'var(--card-bg)',
+                        borderRadius: '12px',
+                        minHeight: '100%',
+                        padding: '32px',
+                        boxShadow: 'var(--shadow)'
+                    }}>
+                        {children}
+                    </div>
                 </div>
             </div>
         </div>

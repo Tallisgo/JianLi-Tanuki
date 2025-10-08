@@ -1,5 +1,25 @@
 import React, { useState } from 'react';
-import { getUploadUrl, getTaskStatusUrl, getFileDownloadUrl } from '../config/api';
+
+// API配置函数
+const getApiBaseUrl = (): string => {
+    if (process.env.NODE_ENV === 'production') {
+        return `${window.location.protocol}//${window.location.hostname}:8001/api/v1`;
+    } else {
+        return 'http://localhost:8001/api/v1';
+    }
+};
+
+const getUploadUrl = (): string => {
+    return `${getApiBaseUrl()}/upload/`;
+};
+
+const getTaskStatusUrl = (taskId: string): string => {
+    return `${getApiBaseUrl()}/tasks/${taskId}`;
+};
+
+const getFileDownloadUrl = (taskId: string): string => {
+    return `${getApiBaseUrl()}/upload/download/${taskId}`;
+};
 import {
     Upload,
     message,
@@ -688,7 +708,7 @@ const UploadResume: React.FC = () => {
                         title="文件预览"
                         size="small"
                         style={{ flex: '1 1 auto', overflow: 'hidden', minHeight: '80vh' }}
-                        bodyStyle={{ padding: 0, height: 'calc(100% - 57px)', overflow: 'auto' }}
+                        styles={{ body: { padding: 0, height: 'calc(100% - 57px)', overflow: 'auto' } }}
                     >
                         {selectedTask ? (
                             <ResumePreview task={selectedTask} />
