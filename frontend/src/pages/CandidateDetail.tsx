@@ -169,12 +169,41 @@ const CandidateDetail: React.FC = () => {
 
                         {/* 教育背景 */}
                         <Card title="教育背景" size="small" style={{ boxShadow: 'var(--shadow)' }}>
-                            <Descriptions column={1} size="small">
-                                <Descriptions.Item label="学历">{candidate.education || '未提供'}</Descriptions.Item>
-                                <Descriptions.Item label="专业">{candidate.major || '未提供'}</Descriptions.Item>
-                                <Descriptions.Item label="学校">{candidate.school || '未提供'}</Descriptions.Item>
-                                <Descriptions.Item label="毕业时间">未提供</Descriptions.Item>
-                            </Descriptions>
+                            {candidate.educationList && candidate.educationList.length > 0 ? (
+                                candidate.educationList.map((edu, index) => {
+                                    // 格式化时间显示
+                                    const formatTimeRange = () => {
+                                        if (edu.start_year && edu.end_year) {
+                                            return `${edu.start_year} - ${edu.end_year}`;
+                                        } else if (edu.start_year) {
+                                            return edu.start_year;
+                                        } else if (edu.end_year) {
+                                            return edu.end_year;
+                                        }
+                                        return '未提供';
+                                    };
+
+                                    return (
+                                        <div key={index} style={{ marginBottom: index < candidate.educationList!.length - 1 ? 16 : 0 }}>
+                                            <Descriptions column={1} size="small">
+                                                <Descriptions.Item label="就读时间">{formatTimeRange()}</Descriptions.Item>
+                                                <Descriptions.Item label="学校">{edu.institution || '未提供'}</Descriptions.Item>
+                                                <Descriptions.Item label="专业">{edu.major || '未提供'}</Descriptions.Item>
+                                                <Descriptions.Item label="学历">{edu.degree || '未提供'}</Descriptions.Item>
+                                                {edu.gpa && <Descriptions.Item label="成绩">{edu.gpa}</Descriptions.Item>}
+                                            </Descriptions>
+                                            {index < candidate.educationList!.length - 1 && <Divider />}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <Descriptions column={1} size="small">
+                                    <Descriptions.Item label="学历">{candidate.education || '未提供'}</Descriptions.Item>
+                                    <Descriptions.Item label="专业">{candidate.major || '未提供'}</Descriptions.Item>
+                                    <Descriptions.Item label="学校">{candidate.school || '未提供'}</Descriptions.Item>
+                                    <Descriptions.Item label="就读时间">未提供</Descriptions.Item>
+                                </Descriptions>
+                            )}
                         </Card>
 
                         {/* 技能标签 */}

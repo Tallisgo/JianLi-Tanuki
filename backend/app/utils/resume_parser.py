@@ -29,10 +29,17 @@ class ResumeParser:
 
 请从输入文本中提取以下信息，并以JSON格式输出。如果某些信息无法找到，请使用`null`或空字符串表示。输出必须严格遵循下面的JSON结构。
 
+**重要提示**：
+- 教育背景：请提取所有教育经历，包括本科、硕士、博士等，按时间倒序排列（最新的在前）
+- 时间格式：入学时间和毕业时间请使用4位年份格式（如"2018"、"2021"）
+- 学位信息：请准确识别学位类型（如"学士学位"、"硕士学位"、"博士学位"等）
+- 学校名称：请提取完整的学校名称
+- GPA信息：如果简历中有GPA或成绩信息，请一并提取
+
 需要提取的字段：
 - **姓名**（全名）
 - **联系方式**：包括电话和邮箱（如果多个，取主要的一个）
-- **教育背景**：列表形式，每个项目包括学位、学校、专业、毕业年份
+- **教育背景**：列表形式，每个项目包括学位、学校、专业、入学时间、毕业时间、GPA（如有）
 - **工作经历**：列表形式，每个项目包括职位、公司、工作时间、工作描述（简要）
 - **项目经验**：列表形式，每个项目包括项目名称、描述、技术栈
 - **技能**：数组形式，列出关键技能（如编程语言、工具等）
@@ -51,11 +58,20 @@ class ResumeParser:
     },
     "education": [
         {
-            "degree": "学士学位",
-            "institution": "某某大学",
+            "degree": "硕士学位",
+            "institution": "清华大学",
             "major": "计算机科学与技术",
-            "start_year": "2016",
-            "end_year": "2020"
+            "start_year": "2018",
+            "end_year": "2021",
+            "gpa": "3.8/4.0"
+        },
+        {
+            "degree": "学士学位",
+            "institution": "北京理工大学",
+            "major": "软件工程",
+            "start_year": "2014",
+            "end_year": "2018",
+            "gpa": "3.6/4.0"
         }
     ],
     "experience": [
@@ -207,6 +223,22 @@ class ResumeParser:
             print(f"图片OCR提取失败: {e}")
             raise
     
+    def _enhance_education_extraction(self, text: str) -> str:
+        """增强教育背景提取的预处理"""
+        # 添加教育背景相关的关键词提示
+        education_keywords = [
+            "教育背景", "教育经历", "学历", "学位", "毕业", "入学", "大学", "学院", "学校",
+            "本科", "硕士", "博士", "学士", "研究生", "GPA", "成绩", "专业", "院系"
+        ]
+        
+        # 检查文本中是否包含教育相关信息
+        has_education = any(keyword in text for keyword in education_keywords)
+        
+        if has_education:
+            return text + "\n\n[注意：请仔细提取所有教育经历，包括完整的入学时间、毕业时间、学位、学校、专业和GPA信息]"
+        
+        return text
+
     async def _parse_with_llm(self, text: str) -> ResumeInfo:
         """使用LLM解析文本"""
         if not self.api_key:
@@ -214,6 +246,9 @@ class ResumeParser:
             return self._get_mock_resume_info()
         
         try:
+            # 增强教育背景提取
+            enhanced_text = self._enhance_education_extraction(text)
+            
             payload = {
                 "model": settings.LLM_MODEL,
                 "messages": [
@@ -223,10 +258,12 @@ class ResumeParser:
                     },
                     {
                         "role": "user",
-                        "content": text
+                        "content": enhanced_text
                     }
                 ],
-                "max_tokens": settings.MAX_TOKENS
+                "max_tokens": settings.MAX_TOKENS,
+                "temperature": settings.LLM_TEMPERATURE,
+                "top_p": settings.LLM_TOP_P
             }
             
             headers = {
@@ -355,11 +392,20 @@ class ResumeParser:
             ),
             education=[
                 EducationInfo(
-                    degree="学士学位",
-                    institution="某某大学",
+                    degree="硕士学位",
+                    institution="清华大学",
                     major="计算机科学与技术",
-                    start_year="2016",
-                    end_year="2020"
+                    start_year="2018",
+                    end_year="2021",
+                    gpa="3.8/4.0"
+                ),
+                EducationInfo(
+                    degree="学士学位",
+                    institution="北京理工大学",
+                    major="软件工程",
+                    start_year="2014",
+                    end_year="2018",
+                    gpa="3.6/4.0"
                 )
             ],
             experience=[
