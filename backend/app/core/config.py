@@ -19,13 +19,15 @@ class Settings:
     # API配置
     API_V1_STR: str = os.getenv("API_V1_STR", "/api/v1")
     PORT: int = int(os.getenv("PORT", "8001"))
-    HOST: str = os.getenv("HOST", "127.0.0.1")
+    HOST: str = os.getenv("HOST", "0.0.0.0")  # 允许外部访问
     
-    # CORS配置
-    BACKEND_CORS_ORIGINS: List[str] = os.getenv(
-        "BACKEND_CORS_ORIGINS", 
-        "http://localhost:3000,http://localhost:5173,http://localhost:8001,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:8001"
-    ).split(",")
+    # CORS配置 - 允许所有来源（生产环境建议限制具体域名）
+    BACKEND_CORS_ORIGINS: List[str] = [
+        origin.strip() for origin in os.getenv(
+            "BACKEND_CORS_ORIGINS",
+            "*"  # 临时允许所有来源，生产环境请限制具体域名
+        ).split(",") if origin.strip()
+    ]
     
     # 数据库配置
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./data/resume_parser.db")
@@ -45,6 +47,11 @@ class Settings:
     MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "4096"))
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "1.2"))
     LLM_TOP_P: float = float(os.getenv("LLM_TOP_P", "0.9"))
+    
+    # JWT配置
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
     
     # OCR配置
     OCR_LANGUAGE: str = os.getenv("OCR_LANGUAGE", "ch")
