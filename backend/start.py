@@ -28,15 +28,31 @@ def main():
     else:
         print("✅ API密钥已配置")
     
+    # 获取服务器IP地址
+    import socket
+    def get_local_ip():
+        try:
+            # 连接到一个远程地址来获取本机IP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "127.0.0.1"
+    
+    local_ip = get_local_ip()
+    
     # 启动服务
     print("启动简历解析后端服务...")
-    print("服务地址: http://localhost:8001")
-    print("API文档: http://localhost:8001/docs")
+    print("本地访问: http://127.0.0.1:8001")
+    print("公网访问: http://{}:8001".format(local_ip))
+    print("API文档: http://{}:8001/docs".format(local_ip))
     print("按 Ctrl+C 停止服务")
     
     uvicorn.run(
         "app.main:app",
-        host="127.0.0.1",
+        host="0.0.0.0",  # 修改为0.0.0.0支持公网访问
         port=8001,
         reload=True,  # 开发模式，代码变更时自动重启
         log_level="info"
