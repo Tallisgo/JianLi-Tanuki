@@ -68,3 +68,4 @@ export const getCandidateUrls = () => ({
 export const getHealthUrl = (): string => {
     return `${getApiBaseUrl()}/health`;
 };
+

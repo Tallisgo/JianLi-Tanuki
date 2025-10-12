@@ -161,3 +161,4 @@ class UserModel(BaseModel):
     def get_display_name(self) -> str:
         """获取显示名称"""
         return self.full_name or self.username
+
