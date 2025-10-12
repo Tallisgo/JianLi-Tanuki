@@ -4,7 +4,17 @@
 
 // API配置函数
 const getApiBaseUrl = (): string => {
-    if (process.env.NODE_ENV === 'production') {
+    // 检查是否在浏览器环境中
+    if (typeof window === 'undefined') {
+        return 'http://localhost:8001/api/v1';
+    }
+
+    // 检查是否为生产环境或部署环境
+    const isProduction = process.env.NODE_ENV === 'production' ||
+        (window.location.hostname !== 'localhost' &&
+            window.location.hostname !== '127.0.0.1');
+
+    if (isProduction) {
         // 生产环境：使用当前访问的域名，不包含端口号（通过Nginx代理）
         return `${window.location.protocol}//${window.location.hostname}/api/v1`;
     } else {
