@@ -5,8 +5,8 @@
 // API配置函数
 const getApiBaseUrl = (): string => {
     if (process.env.NODE_ENV === 'production') {
-        // 生产环境：使用当前访问的域名
-        return `${window.location.protocol}//${window.location.hostname}:8001/api/v1`;
+        // 生产环境：使用当前访问的域名，不包含端口号（通过Nginx代理）
+        return `${window.location.protocol}//${window.location.hostname}/api/v1`;
     } else {
         // 开发环境：使用localhost
         return 'http://localhost:8001/api/v1';
