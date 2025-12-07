@@ -95,8 +95,18 @@ export interface TaskResponse {
     task_id: string;
     status: string;
     result?: any;
+    error?: string;
     created_at: string;
     updated_at: string;
+}
+
+export interface DuplicateInfo {
+    duplicate: boolean;
+    candidate_id: number;
+    candidate_name: string;
+    candidate_phone?: string;
+    candidate_email?: string;
+    message: string;
 }
 
 export interface UploadResponse {
@@ -767,6 +777,37 @@ class ApiService {
         } catch (error) {
             console.error('更新简历失败:', error);
             throw error;
+        }
+    }
+
+    /**
+     * 获取任务状态
+     */
+    async getTaskStatus(taskId: string): Promise<TaskResponse | null> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`);
+            if (!response.ok) {
+                return null;
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('获取任务状态失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 解析重复信息
+     */
+    parseDuplicateInfo(errorStr: string): DuplicateInfo | null {
+        try {
+            const info = JSON.parse(errorStr);
+            if (info.duplicate) {
+                return info as DuplicateInfo;
+            }
+            return null;
+        } catch {
+            return null;
         }
     }
 

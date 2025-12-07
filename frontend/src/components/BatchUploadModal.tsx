@@ -497,6 +497,80 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({
         }
     };
 
+    // 监控单个任务的解析状态
+    const monitorTaskStatus = async (fileId: string, taskId: string): Promise<void> => {
+        const maxRetries = 60; // 最多检查60次（约3分钟）
+        let retries = 0;
+
+        const checkStatus = async (): Promise<void> => {
+            if (retries >= maxRetries) {
+                setFileList(prev => prev.map(f =>
+                    f.id === fileId && f.status === 'success'
+                        ? { ...f, message: '解析超时，请稍后刷新查看' }
+                        : f
+                ));
+                return;
+            }
+
+            retries++;
+
+            try {
+                const task = await apiService.getTaskStatus(taskId);
+                if (!task) {
+                    setTimeout(checkStatus, 3000);
+                    return;
+                }
+
+                if (task.status === 'completed') {
+                    // 解析成功，获取候选人信息
+                    const candidate = await apiService.getCandidate(taskId);
+                    setFileList(prev => prev.map(f =>
+                        f.id === fileId ? {
+                            ...f,
+                            status: 'success',
+                            message: candidate ? `已添加: ${candidate.name}` : '解析完成'
+                        } : f
+                    ));
+                    onSuccess?.();
+                } else if (task.status === 'duplicate') {
+                    // 发现重复
+                    const duplicateInfo = task.error ? apiService.parseDuplicateInfo(task.error) : null;
+                    setFileList(prev => prev.map(f =>
+                        f.id === fileId ? {
+                            ...f,
+                            status: 'duplicate',
+                            message: duplicateInfo
+                                ? `重复: ${duplicateInfo.candidate_name}`
+                                : '发现重复候选人',
+                            duplicateInfo: duplicateInfo ? {
+                                candidateId: duplicateInfo.candidate_id,
+                                candidateName: duplicateInfo.candidate_name
+                            } : undefined
+                        } : f
+                    ));
+                } else if (task.status === 'failed') {
+                    // 解析失败
+                    setFileList(prev => prev.map(f =>
+                        f.id === fileId ? {
+                            ...f,
+                            status: 'error',
+                            message: task.error || '解析失败'
+                        } : f
+                    ));
+                } else if (task.status === 'parsing' || task.status === 'uploaded') {
+                    // 仍在处理中，继续监控
+                    setTimeout(checkStatus, 3000);
+                }
+            } catch (error) {
+                console.warn(`监控任务 ${taskId} 状态失败:`, error);
+                setTimeout(checkStatus, 3000);
+            }
+        };
+
+        // 开始检查
+        setTimeout(checkStatus, 2000);
+    };
+
     // 上传单个文件
     const uploadSingleFile = async (fileItem: UploadFileItem): Promise<void> => {
         // 更新状态为上传中
@@ -524,7 +598,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({
 
             clearInterval(progressInterval);
 
-            // 更新状态为成功
+            // 更新状态为成功（上传成功，开始解析）
             setFileList(prev => prev.map(f =>
                 f.id === fileItem.id ? {
                     ...f,
@@ -535,8 +609,8 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({
                 } : f
             ));
 
-            // 单个文件上传成功后立即通知刷新候选人列表
-            onSuccess?.();
+            // 开始监控解析状态
+            monitorTaskStatus(fileItem.id, response.task_id);
 
         } catch (error: any) {
             // 更新状态为失败

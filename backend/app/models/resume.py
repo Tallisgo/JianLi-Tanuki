@@ -12,6 +12,7 @@ class TaskStatus(str, Enum):
     PARSING = "parsing"
     COMPLETED = "completed"
     FAILED = "failed"
+    DUPLICATE = "duplicate"  # 发现重复候选人
 
 class ContactInfo(BaseModel):
     """联系方式信息"""
