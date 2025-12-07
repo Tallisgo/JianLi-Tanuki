@@ -13,13 +13,51 @@ class ResumeService:
         self.task_service = TaskService()
         self.parser = ResumeParser()
     
+    def _find_exact_duplicate(self, name: str, phone: str = None, email: str = None):
+        """
+        查找严格匹配的重复候选人
+        
+        严格匹配规则: 姓名相同 AND (电话相同 OR 邮箱相同)
+        
+        Returns:
+            候选人对象，如果没有找到返回 None
+        """
+        if not name:
+            return None
+        
+        # 先按姓名查找
+        candidates = db_service.candidate_repo.get_by_exact_name(name)
+        
+        if not candidates:
+            return None
+        
+        # 如果有电话或邮箱，进行严格匹配
+        if phone or email:
+            for candidate in candidates:
+                # 电话匹配
+                if phone and candidate.phone:
+                    # 标准化电话号码比较（去除空格和横线）
+                    norm_phone = phone.replace(' ', '').replace('-', '').replace('+86', '')
+                    norm_cand_phone = candidate.phone.replace(' ', '').replace('-', '').replace('+86', '')
+                    if norm_phone == norm_cand_phone:
+                        return candidate
+                
+                # 邮箱匹配
+                if email and candidate.email:
+                    if email.lower() == candidate.email.lower():
+                        return candidate
+        
+        # 如果没有电话和邮箱，但姓名完全匹配，返回第一个（可能是重复）
+        # 这种情况下，让系统询问用户是否是同一人
+        return candidates[0] if len(candidates) == 1 else None
+    
     async def process_resume(self, task_id: str, force_update: bool = False):
         """
         处理简历解析任务
         
         Args:
             task_id: 任务ID
-            force_update: 是否强制更新已存在的候选人
+            force_update: 是否强制更新已存在的候选人（跳过查重）
         """
         try:
             # 获取任务信息
@@ -37,31 +75,44 @@ class ResumeService:
             
             # 解析文件
             result = await self.parser.parse_file(task.file_path)
-
-            print(result)
+            print(f"解析结果: 姓名={result.name}")
             
-            # 检查是否存在重复候选人
+            # 检查是否存在严格匹配的重复候选人
             if result.name and not force_update:
                 phone = result.contact.phone if result.contact else None
                 email = result.contact.email if result.contact else None
-                duplicates = db_service.candidate_repo.find_duplicates(
-                    result.name, phone, email
-                )
                 
-                if duplicates:
-                    print(f"发现重复候选人: {result.name}, 共 {len(duplicates)} 条记录")
-                    # 即使有重复，我们仍然继续创建新记录（用户可以后续合并）
-                    # 但在日志中记录警告
+                duplicate = self._find_exact_duplicate(result.name, phone, email)
+                
+                if duplicate:
+                    print(f"🔴 发现严格匹配的重复候选人: {result.name} (ID: {duplicate.id})")
+                    
+                    # 设置任务状态为重复，不创建新记录
+                    # 在 error 字段中存储重复候选人信息，供前端解析
+                    import json
+                    duplicate_info = json.dumps({
+                        "duplicate": True,
+                        "candidate_id": duplicate.id,
+                        "candidate_name": duplicate.name,
+                        "candidate_phone": duplicate.phone,
+                        "candidate_email": duplicate.email,
+                        "message": f"候选人 {duplicate.name} 已存在"
+                    }, ensure_ascii=False)
+                    
+                    await self.task_service.update_task_status(
+                        task_id, TaskStatus.DUPLICATE, error=duplicate_info
+                    )
+                    return
             
-            # 更新任务状态为完成
+            # 没有重复或强制更新，正常完成任务并创建候选人
             await self.task_service.update_task_status(
                 task_id, TaskStatus.COMPLETED, progress=100, result=result
             )
             
-            print(f"任务解析完成: {task_id}")
+            print(f"✅ 任务解析完成: {task_id}, 候选人: {result.name}")
             
         except Exception as e:
-            print(f"任务解析失败 {task_id}: {e}")
+            print(f"❌ 任务解析失败 {task_id}: {e}")
             
             # 更新任务状态为失败
             await self.task_service.update_task_status(

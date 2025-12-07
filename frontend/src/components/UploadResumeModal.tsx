@@ -279,72 +279,130 @@ const UploadResumeModal: React.FC<UploadResumeModalProps> = ({
         const taskIds = uploadResults.map(result => result.task_id);
         const fileNames = uploadResults.map(result => result.fileName || '未知文件');
         const totalFiles = taskIds.length;
-        let completedFiles = 0;
+        let processedFiles = 0;
         const completedCandidates: { id: string; name: string; fileName: string }[] = [];
+        const duplicateCandidates: { taskId: string; fileName: string; duplicateInfo: any }[] = [];
+        const processedTaskIds = new Set<string>();
 
-        // 每5秒检查一次解析状态
+        // 每3秒检查一次解析状态
         const checkInterval = setInterval(async () => {
             try {
-                const results = await Promise.all(
+                await Promise.all(
                     taskIds.map(async (taskId, index) => {
+                        // 跳过已处理的任务
+                        if (processedTaskIds.has(taskId)) return;
+
                         try {
-                            const candidate = await apiService.getCandidate(taskId);
-                            if (candidate) {
-                                // 检查是否已经记录过
-                                if (!completedCandidates.find(c => c.id === taskId)) {
+                            const task = await apiService.getTaskStatus(taskId);
+                            if (!task) return;
+
+                            // 处理不同状态
+                            if (task.status === 'completed') {
+                                processedTaskIds.add(taskId);
+                                processedFiles++;
+
+                                // 获取候选人信息
+                                const candidate = await apiService.getCandidate(taskId);
+                                if (candidate) {
                                     completedCandidates.push({
                                         id: taskId,
                                         name: candidate.name || '未知候选人',
                                         fileName: fileNames[index]
                                     });
+                                    showParsingCompleteNotification({
+                                        id: taskId,
+                                        name: candidate.name || '未知候选人',
+                                        fileName: fileNames[index]
+                                    });
                                 }
-                                return true;
+                            } else if (task.status === 'duplicate') {
+                                processedTaskIds.add(taskId);
+                                processedFiles++;
+
+                                // 解析重复信息
+                                const duplicateInfo = task.error ? apiService.parseDuplicateInfo(task.error) : null;
+                                if (duplicateInfo) {
+                                    duplicateCandidates.push({
+                                        taskId,
+                                        fileName: fileNames[index],
+                                        duplicateInfo
+                                    });
+
+                                    // 显示重复候选人通知
+                                    notification.warning({
+                                        message: '发现重复候选人',
+                                        description: (
+                                            <div>
+                                                <p>文件 <strong>{fileNames[index]}</strong> 与已存在的候选人 <strong>{duplicateInfo.candidate_name}</strong> 重复</p>
+                                                <p style={{ fontSize: 12, color: '#666' }}>
+                                                    {duplicateInfo.candidate_phone && `电话: ${duplicateInfo.candidate_phone}`}
+                                                    {duplicateInfo.candidate_email && ` | 邮箱: ${duplicateInfo.candidate_email}`}
+                                                </p>
+                                            </div>
+                                        ),
+                                        duration: 10,
+                                        placement: 'topRight'
+                                    });
+                                }
+                            } else if (task.status === 'failed') {
+                                processedTaskIds.add(taskId);
+                                processedFiles++;
+
+                                notification.error({
+                                    message: '解析失败',
+                                    description: `文件 ${fileNames[index]} 解析失败: ${task.error || '未知错误'}`,
+                                    duration: 10,
+                                    placement: 'topRight'
+                                });
                             }
-                            return false;
                         } catch (error) {
-                            return false;
+                            console.warn(`检查任务 ${taskId} 状态失败:`, error);
                         }
                     })
                 );
 
-                const newCompletedCount = results.filter(completed => completed).length;
-
-                // 如果有新的文件解析完成，显示通知
-                if (newCompletedCount > completedFiles) {
-                    const newlyCompleted = completedCandidates.slice(completedFiles);
-                    newlyCompleted.forEach(candidate => {
-                        showParsingCompleteNotification(candidate);
-                    });
-                    completedFiles = newCompletedCount;
-                }
-
-                // 如果所有文件都解析完成，停止监控
-                if (completedFiles === totalFiles) {
+                // 如果所有文件都处理完成，停止监控
+                if (processedFiles === totalFiles) {
                     clearInterval(checkInterval);
 
+                    const successCount = completedCandidates.length;
+                    const duplicateCount = duplicateCandidates.length;
+                    const failedCount = totalFiles - successCount - duplicateCount;
+
                     // 显示汇总通知
-                    notification.success({
-                        message: '简历解析完成',
-                        description: (
-                            <div>
-                                <p>所有 {totalFiles} 个简历已解析完成！</p>
-                                <Button
-                                    type="link"
-                                    size="small"
-                                    icon={<EyeOutlined />}
-                                    onClick={() => navigate('/candidates')}
-                                    style={{ padding: 0 }}
-                                >
-                                    查看候选人列表
-                                </Button>
-                            </div>
-                        ),
-                        duration: 10,
-                        placement: 'topRight'
-                    });
+                    if (successCount > 0 || duplicateCount > 0) {
+                        notification.info({
+                            message: '简历处理完成',
+                            description: (
+                                <div>
+                                    <p>
+                                        成功: {successCount} 个
+                                        {duplicateCount > 0 && <span style={{ color: '#faad14' }}> | 重复: {duplicateCount} 个</span>}
+                                        {failedCount > 0 && <span style={{ color: '#ff4d4f' }}> | 失败: {failedCount} 个</span>}
+                                    </p>
+                                    <Button
+                                        type="link"
+                                        size="small"
+                                        icon={<EyeOutlined />}
+                                        onClick={() => navigate('/candidates')}
+                                        style={{ padding: 0 }}
+                                    >
+                                        查看候选人列表
+                                    </Button>
+                                </div>
+                            ),
+                            duration: 10,
+                            placement: 'topRight'
+                        });
+                    }
 
                     // 尝试显示浏览器通知
-                    showBrowserNotification(`简历解析完成`, `所有 ${totalFiles} 个简历已解析完成，请查看候选人列表。`);
+                    if (successCount > 0) {
+                        showBrowserNotification(
+                            '简历处理完成',
+                            `成功添加 ${successCount} 个候选人${duplicateCount > 0 ? `，${duplicateCount} 个重复` : ''}`
+                        );
+                    }
 
                     // 静默刷新候选人列表
                     onSuccess?.();
@@ -353,15 +411,15 @@ const UploadResumeModal: React.FC<UploadResumeModalProps> = ({
             } catch (error) {
                 console.error('监控解析状态失败:', error);
             }
-        }, 5000);
+        }, 3000);
 
         // 30分钟后停止监控
         setTimeout(() => {
             clearInterval(checkInterval);
-            if (completedFiles < totalFiles) {
+            if (processedFiles < totalFiles) {
                 notification.warning({
                     message: '解析超时',
-                    description: `已完成 ${completedFiles}/${totalFiles} 个文件的解析`,
+                    description: `已处理 ${processedFiles}/${totalFiles} 个文件`,
                     duration: 10
                 });
             }
