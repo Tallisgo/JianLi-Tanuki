@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from database.models.base import BaseModel
 
+
 class UserModel(BaseModel):
     """用户数据库模型"""
     
@@ -16,8 +17,8 @@ class UserModel(BaseModel):
                  full_name: Optional[str] = None,
                  avatar: Optional[str] = None,
                  phone: Optional[str] = None,
-                 role: str = "user",  # user, admin
-                 status: str = "active",  # active, inactive, banned
+                 role: str = "user",
+                 status: str = "active",
                  last_login: Optional[datetime] = None,
                  login_count: int = 0,
                  created_at: Optional[datetime] = None,
@@ -39,7 +40,7 @@ class UserModel(BaseModel):
         self.updated_at = updated_at
     
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
+        """转换为字典（不包含密码哈希）"""
         return {
             "id": self.id,
             "username": self.username,
@@ -54,6 +55,12 @@ class UserModel(BaseModel):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
+    
+    def to_dict_with_password(self) -> Dict[str, Any]:
+        """转换为字典（包含密码哈希，仅用于内部使用）"""
+        data = self.to_dict()
+        data["password_hash"] = self.password_hash
+        return data
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'UserModel':
@@ -82,8 +89,8 @@ class UserModel(BaseModel):
         
         return cls(
             id=data.get("id"),
-            username=data["username"],
-            email=data["email"],
+            username=data.get("username"),
+            email=data.get("email"),
             password_hash=data.get("password_hash"),
             full_name=data.get("full_name"),
             avatar=data.get("avatar"),
@@ -109,7 +116,7 @@ class UserModel(BaseModel):
             self.status,
             self.last_login.isoformat() if self.last_login else None,
             self.login_count,
-            self.created_at.isoformat(),
+            self.created_at.isoformat() if self.created_at else None,
             self.updated_at.isoformat() if self.updated_at else None
         )
     
@@ -127,38 +134,38 @@ class UserModel(BaseModel):
             role=row["role"],
             status=row["status"],
             last_login=datetime.fromisoformat(row["last_login"]) if row["last_login"] else None,
-            login_count=row["login_count"],
+            login_count=row["login_count"] or 0,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
             updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None
         )
     
-    def update_info(self, **kwargs):
-        """更新用户信息"""
-        for key, value in kwargs.items():
-            if hasattr(self, key) and key not in ['id', 'created_at', 'password_hash']:
-                setattr(self, key, value)
-        self.updated_at = datetime.now()
-    
-    def update_password(self, password_hash: str):
-        """更新密码"""
-        self.password_hash = password_hash
-        self.updated_at = datetime.now()
-    
-    def update_login_info(self):
-        """更新登录信息"""
-        self.last_login = datetime.now()
-        self.login_count += 1
-        self.updated_at = datetime.now()
-    
     def is_admin(self) -> bool:
-        """检查是否为管理员"""
+        """检查用户是否是管理员"""
         return self.role == "admin"
     
     def is_active(self) -> bool:
-        """检查账户是否激活"""
+        """检查用户是否处于活跃状态"""
         return self.status == "active"
     
-    def get_display_name(self) -> str:
-        """获取显示名称"""
-        return self.full_name or self.username
+    def update_login(self):
+        """更新登录信息"""
+        self.last_login = datetime.now()
+        self.login_count = (self.login_count or 0) + 1
+        self.updated_at = datetime.now()
+    
+    def update_login_info(self):
+        """更新登录信息（别名方法）"""
+        self.update_login()
+    
+    def update_password(self, new_password_hash: str):
+        """更新密码"""
+        self.password_hash = new_password_hash
+        self.updated_at = datetime.now()
+    
+    def update_info(self, **kwargs):
+        """更新用户信息"""
+        for key, value in kwargs.items():
+            if hasattr(self, key) and key not in ['id', 'password_hash']:
+                setattr(self, key, value)
+        self.updated_at = datetime.now()
 

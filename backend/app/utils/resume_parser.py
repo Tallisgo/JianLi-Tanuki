@@ -311,9 +311,40 @@ class ResumeParser:
             print(f"LLM解析失败: {e}")
             raise
     
+    def _normalize_name(self, name: Optional[str]) -> Optional[str]:
+        """
+        规范化姓名
+        - 移除中文名字中间的空格
+        - 保留英文名字中的空格
+        """
+        if not name:
+            return name
+        
+        # 去除首尾空格
+        name = name.strip()
+        
+        # 判断是否为纯中文名字（可能包含少数民族名字中的·）
+        # 中文字符的Unicode范围
+        def is_chinese_char(char):
+            return '\u4e00' <= char <= '\u9fff' or char == '·'
+        
+        # 检查名字是否主要由中文字符组成
+        chinese_count = sum(1 for c in name if is_chinese_char(c))
+        total_letters = sum(1 for c in name if c.isalpha() or is_chinese_char(c))
+        
+        # 如果中文字符占比超过50%，认为是中文名字，移除空格
+        if total_letters > 0 and chinese_count / total_letters > 0.5:
+            # 移除所有空格（但保留·用于少数民族名字）
+            name = ''.join(c for c in name if c != ' ')
+        
+        return name
+
     def _convert_to_resume_info(self, data: Dict[str, Any]) -> ResumeInfo:
         """将解析的数据转换为ResumeInfo对象"""
         try:
+            # 规范化姓名
+            name = self._normalize_name(data.get('name'))
+            
             # 处理联系方式
             contact = None
             if 'contact' in data and data['contact']:
@@ -363,7 +394,7 @@ class ResumeParser:
                     ))
             
             return ResumeInfo(
-                name=data.get('name'),
+                name=name,
                 contact=contact,
                 education=education if education else None,
                 experience=experience if experience else None,

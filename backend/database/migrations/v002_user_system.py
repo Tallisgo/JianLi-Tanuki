@@ -86,3 +86,5 @@ SQL_COMMANDS = [
     "CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON user_activity_logs(created_at)",
 ]
 
+
+

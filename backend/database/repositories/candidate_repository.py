@@ -190,6 +190,51 @@ class CandidateRepository(BaseRepository[CandidateModel]):
         """根据姓名搜索候选人"""
         return self.search({"name": name}, limit, offset)
     
+    def get_by_exact_name(self, name: str) -> List[CandidateModel]:
+        """根据精确姓名查找候选人"""
+        sql = f"SELECT * FROM {self.table_name} WHERE name = ?"
+        try:
+            rows = self.connection.execute_query(sql, (name,))
+            return [CandidateModel.from_row(row) for row in rows]
+        except Exception as e:
+            print(f"根据精确姓名查找候选人失败: {e}")
+            return []
+    
+    def find_duplicates(self, name: str, phone: str = None, email: str = None) -> List[CandidateModel]:
+        """查找重复候选人（通过姓名+电话或姓名+邮箱匹配）"""
+        if not name:
+            return []
+        
+        conditions = ["name = ?"]
+        params = [name]
+        
+        # 如果有电话或邮箱，也加入匹配条件
+        extra_conditions = []
+        if phone:
+            extra_conditions.append("phone = ?")
+            params.append(phone)
+        if email:
+            extra_conditions.append("email = ?")
+            params.append(email)
+        
+        # 构建查询：姓名匹配且（电话匹配或邮箱匹配）
+        if extra_conditions:
+            where_clause = f"name = ? AND ({' OR '.join(extra_conditions)})"
+            params = [name] + params[1:]  # 重新组织参数
+        else:
+            # 只有姓名时，直接按姓名匹配
+            where_clause = "name = ?"
+            params = [name]
+        
+        sql = f"SELECT * FROM {self.table_name} WHERE {where_clause} ORDER BY created_at DESC"
+        
+        try:
+            rows = self.connection.execute_query(sql, tuple(params))
+            return [CandidateModel.from_row(row) for row in rows]
+        except Exception as e:
+            print(f"查找重复候选人失败: {e}")
+            return []
+    
     def get_by_position(self, position: str, limit: int = 100, offset: int = 0) -> List[CandidateModel]:
         """根据职位搜索候选人"""
         return self.search({"position": position}, limit, offset)
