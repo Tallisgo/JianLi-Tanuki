@@ -102,6 +102,7 @@ export interface TaskResponse {
 export interface UploadResponse {
     task_id: string;
     message: string;
+    candidate_name?: string;
 }
 
 export interface InspirationResponse {

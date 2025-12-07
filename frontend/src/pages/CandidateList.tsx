@@ -18,12 +18,14 @@ import {
     DeleteOutlined,
     EyeOutlined,
     DownloadOutlined,
-    ReloadOutlined
+    ReloadOutlined,
+    UploadOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { apiService, type Candidate } from '../services/api';
 import CandidateEditModal from '../components/CandidateEditModal';
 import UploadResumeModal from '../components/UploadResumeModal';
+import BatchUploadModal from '../components/BatchUploadModal';
 
 const { Option } = Select;
 
@@ -42,6 +44,7 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
     const [uploadModalVisible, setUploadModalVisible] = useState(false);
+    const [batchUploadModalVisible, setBatchUploadModalVisible] = useState(false);
     const [isBackgroundParsing, setIsBackgroundParsing] = useState(false);
 
     // 职位分类映射
@@ -556,6 +559,13 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                             >
                                 上传简历
                             </Button>
+                            <Button
+                                icon={<UploadOutlined />}
+                                onClick={() => setBatchUploadModalVisible(true)}
+                                size="small"
+                            >
+                                批量上传
+                            </Button>
                             {isBackgroundParsing && (
                                 <span style={{
                                     color: 'var(--primary-color)',
@@ -663,6 +673,15 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                 }}
                 onParsingComplete={() => {
                     setIsBackgroundParsing(false);
+                }}
+            />
+
+            {/* 批量上传模态框 */}
+            <BatchUploadModal
+                visible={batchUploadModalVisible}
+                onClose={() => setBatchUploadModalVisible(false)}
+                onSuccess={() => {
+                    loadCandidates(false);
                 }}
             />
         </div>
