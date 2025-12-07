@@ -182,3 +182,5 @@ async def validate_token(current_user: dict = Depends(get_current_user)):
         "user": current_user
     }
 
+
+

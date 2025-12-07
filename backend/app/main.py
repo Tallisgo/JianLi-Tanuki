@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["Content-Disposition"],  # 暴露文件下载头给前端
     )
     
     # 添加根路径
