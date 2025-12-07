@@ -648,13 +648,123 @@ class ApiService {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `resume_${taskId}.pdf`;
+
+            // 从响应头获取文件名
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `resume_${taskId}.pdf`;
+
+            console.log('Content-Disposition:', contentDisposition);
+
+            if (contentDisposition) {
+                // 尝试解析 filename*=UTF-8''xxx 格式（RFC 5987）
+                // 匹配到字符串末尾或分号之前的所有内容
+                const utf8Match = contentDisposition.match(/filename\*\s*=\s*UTF-8''([^;\s]+)/i);
+                if (utf8Match) {
+                    try {
+                        filename = decodeURIComponent(utf8Match[1]);
+                        console.log('解析到UTF-8文件名:', filename);
+                    } catch (e) {
+                        console.warn('解码UTF-8文件名失败:', e);
+                    }
+                } else {
+                    // 尝试解析普通 filename="xxx" 格式
+                    const normalMatch = contentDisposition.match(/filename\s*=\s*"?([^";\n]+)"?/i);
+                    if (normalMatch) {
+                        filename = normalMatch[1];
+                        console.log('解析到普通文件名:', filename);
+                    }
+                }
+            } else {
+                console.warn('未获取到 Content-Disposition 头');
+            }
+
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } catch (error) {
             console.error('下载简历失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 检查候选人是否已存在
+     */
+    async checkDuplicateCandidate(name: string, phone?: string, email?: string): Promise<{
+        exists: boolean;
+        candidates: Array<{
+            id: number;
+            name: string;
+            phone?: string;
+            email?: string;
+            position?: string;
+            created_at?: string;
+            updated_at?: string;
+        }>;
+    }> {
+        try {
+            const params = new URLSearchParams({ name });
+            if (phone) params.append('phone', phone);
+            if (email) params.append('email', email);
+
+            const response = await fetch(`${API_BASE_URL}/upload/check-duplicate?${params}`);
+            if (!response.ok) {
+                throw new Error('检查候选人失败');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('检查候选人失败:', error);
+            return { exists: false, candidates: [] };
+        }
+    }
+
+    /**
+     * 上传简历文件
+     */
+    async uploadResume(formData: FormData, forceUpdate: boolean = false): Promise<UploadResponse> {
+        try {
+            const url = forceUpdate
+                ? `${API_BASE_URL}/upload/?force_update=true`
+                : `${API_BASE_URL}/upload/`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '上传简历失败');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('上传简历失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 更新已存在候选人的简历
+     */
+    async updateCandidateResume(candidateId: number, formData: FormData): Promise<UploadResponse> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/upload/update/${candidateId}`, {
+                method: 'PUT',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '更新简历失败');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('更新简历失败:', error);
             throw error;
         }
     }

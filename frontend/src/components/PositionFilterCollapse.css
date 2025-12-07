@@ -1,0 +1,180 @@
+/* 职位筛选折叠面板样式 */
+.position-filter-collapse {
+    margin-bottom: 16px;
+    animation: slideInDown 0.4s ease-out;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.position-collapse .ant-collapse-item {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-bg);
+    box-shadow: var(--shadow);
+}
+
+.position-collapse .ant-collapse-header {
+    background: var(--card-bg) !important;
+    border-radius: 8px 8px 0 0 !important;
+    padding: 12px 16px !important;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.position-collapse .ant-collapse-content {
+    background: var(--card-bg) !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
+.position-collapse .ant-collapse-content-box {
+    padding: 16px !important;
+}
+
+.collapse-main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.position-categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+}
+
+.position-category-item {
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.position-category-item:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.position-category-item.selected {
+    background: var(--primary-color)10;
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 12px rgba(24, 144, 255, 0.15);
+}
+
+.position-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 4px 0;
+}
+
+.position-panel-header.selected {
+    font-weight: 600;
+}
+
+.category-icon {
+    font-size: 16px;
+    margin-right: 8px;
+}
+
+.category-preview {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .position-categories {
+        grid-template-columns: 1fr;
+    }
+
+    .position-category-item {
+        padding: 10px 12px;
+    }
+
+    .collapse-main-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}
+
+/* 暗色主题适配 */
+[data-theme="dark"] .position-category-item {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .position-category-item:hover {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .position-category-item.selected {
+    background: var(--primary-color)20;
+}
+
+/* 动画效果 */
+.position-category-item {
+    animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 徽章样式优化 */
+.ant-badge-count {
+    font-size: 11px;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    border-radius: 9px;
+}
+
+/* 选中状态的视觉反馈 */
+.position-category-item.selected::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, transparent 0%, rgba(24, 144, 255, 0.05) 100%);
+    border-radius: 6px;
+    pointer-events: none;
+}
+
+/* 清除按钮样式 */
+.ant-btn-text {
+    color: var(--text-secondary);
+    transition: color 0.3s ease;
+}
+
+.ant-btn-text:hover {
+    color: var(--primary-color);
+    background: var(--primary-color)10;
+}

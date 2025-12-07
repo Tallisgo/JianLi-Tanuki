@@ -7,9 +7,10 @@ const { Text } = Typography;
 
 interface InspirationCardProps {
     style?: React.CSSProperties;
+    enlarged?: boolean;
 }
 
-const InspirationCard: React.FC<InspirationCardProps> = ({ style }) => {
+const InspirationCard: React.FC<InspirationCardProps> = ({ style, enlarged = false }) => {
     const [inspiration, setInspiration] = useState<InspirationResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -293,11 +294,11 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ style }) => {
                             style={{
                                 color: isAnimating ? getIconColor() : '#faad14',
                                 animation: isAnimating ? getIconAnimation() : 'none',
-                                fontSize: '18px'
+                                fontSize: enlarged ? '24px' : '18px'
                             }}
                         />
                         <span style={{
-                            fontSize: '16px',
+                            fontSize: enlarged ? '20px' : '16px',
                             fontWeight: 'bold',
                             textShadow: isAnimating ? '0 0 10px rgba(255, 255, 255, 0.8)' : 'none',
                             transition: 'all 0.3s ease-in-out'
@@ -320,13 +321,13 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ style }) => {
                             : 'rgba(255, 255, 255, 0.1)',
                         borderBottom: '1px solid rgba(255, 255, 255, 0.3)',
                         color: 'white',
-                        padding: '12px 16px',
+                        padding: enlarged ? '16px 20px' : '12px 16px',
                         transition: 'all 0.3s ease-in-out'
                     },
                     body: {
-                        padding: '16px',
+                        padding: enlarged ? '24px' : '16px',
                         background: 'rgba(255, 255, 255, 0.05)',
-                        minHeight: '120px',
+                        minHeight: enlarged ? '100px' : '80px',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'center'
@@ -366,15 +367,16 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ style }) => {
                     {inspiration ? (
                         <div>
                             <div style={{
-                                fontSize: '14px',
+                                fontSize: enlarged ? '20px' : '14px',
                                 lineHeight: '1.6',
-                                marginBottom: '12px',
+                                marginBottom: enlarged ? '16px' : '12px',
                                 textAlign: 'center',
                                 color: 'white',
-                                fontWeight: 500,
+                                fontWeight: enlarged ? 600 : 500,
                                 animation: isAnimating ? 'fadeInUp 1s ease-out' : 'none',
                                 transform: isAnimating ? 'translateY(-8px) scale(1.02)' : 'translateY(0) scale(1)',
-                                transition: 'all 0.6s ease-in-out'
+                                transition: 'all 0.6s ease-in-out',
+                                letterSpacing: enlarged ? '0.5px' : 'normal'
                             }}>
                                 {inspiration.inspiration}
                             </div>
@@ -382,7 +384,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ style }) => {
                                 display: 'flex',
                                 justifyContent: 'center',
                                 alignItems: 'center',
-                                fontSize: '12px',
+                                fontSize: enlarged ? '14px' : '12px',
                                 color: 'rgba(255, 255, 255, 0.8)',
                                 animation: isAnimating ? 'fadeIn 0.8s ease-out 0.5s both' : 'none',
                                 transform: isAnimating ? 'scale(1.05)' : 'scale(1)',
@@ -391,12 +393,13 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ style }) => {
                                 <Space size="small">
                                     <StarOutlined style={{
                                         color: isAnimating ? getIconColor() : '#faad14',
-                                        animation: isAnimating ? getIconAnimation() : 'none'
+                                        animation: isAnimating ? getIconAnimation() : 'none',
+                                        fontSize: enlarged ? '16px' : '14px'
                                     }} />
                                     <Text style={{
                                         color: 'rgba(255, 255, 255, 0.9)',
                                         fontWeight: '500',
-                                        fontSize: '13px'
+                                        fontSize: enlarged ? '15px' : '13px'
                                     }}>
                                         {getInspirationTag()}
                                     </Text>
@@ -407,7 +410,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ style }) => {
                         <div style={{
                             textAlign: 'center',
                             color: 'rgba(255, 255, 255, 0.8)',
-                            fontSize: '14px'
+                            fontSize: enlarged ? '16px' : '14px'
                         }}>
                             加载中...
                         </div>

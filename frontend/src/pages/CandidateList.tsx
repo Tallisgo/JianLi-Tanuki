@@ -5,7 +5,6 @@ import {
     Input,
     Select,
     Space,
-    Tag,
     Card,
     Row,
     Col,
@@ -24,29 +23,54 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { apiService, type Candidate } from '../services/api';
 import CandidateEditModal from '../components/CandidateEditModal';
+import UploadResumeModal from '../components/UploadResumeModal';
 
 const { Option } = Select;
 
-const CandidateList: React.FC = () => {
+interface CandidateListProps {
+    category?: string;
+}
+
+const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
     const navigate = useNavigate();
     const [searchText, setSearchText] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('');
+    const [categoryFilter, setCategoryFilter] = useState<string>('');
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [candidates, setCandidates] = useState<Candidate[]>([]);
+    const [filteredCandidates, setFilteredCandidates] = useState<Candidate[]>([]);
     const [loading, setLoading] = useState(false);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
+    const [uploadModalVisible, setUploadModalVisible] = useState(false);
+    const [isBackgroundParsing, setIsBackgroundParsing] = useState(false);
+
+    // 职位分类映射
+    const categoryMap: Record<string, string> = {
+        'tech': '技术开发',
+        'design': '产品设计',
+        'marketing': '运营推广',
+        'sales': '销售商务',
+        'hr': '人力资源',
+        'finance': '财务金融',
+        'admin': '管理行政',
+        'other': '其他职位'
+    };
 
     // 加载候选人数据
-    const loadCandidates = async () => {
-        setLoading(true);
+    const loadCandidates = async (showLoading: boolean = true) => {
+        if (showLoading) {
+            setLoading(true);
+        }
         try {
             const data = await apiService.getCandidates();
             setCandidates(data);
+            setFilteredCandidates(data);
         } catch (error) {
             message.error('加载候选人数据失败');
         } finally {
-            setLoading(false);
+            if (showLoading) {
+                setLoading(false);
+            }
         }
     };
 
@@ -54,6 +78,59 @@ const CandidateList: React.FC = () => {
     useEffect(() => {
         loadCandidates();
     }, []);
+
+    // 根据URL参数自动筛选
+    useEffect(() => {
+        if (category && categoryMap[category]) {
+            const categoryName = categoryMap[category];
+            // 根据职位分类筛选候选人
+            const filtered = candidates.filter(candidate => {
+                if (!candidate.position) return categoryName === '其他职位';
+
+                const position = candidate.position.toLowerCase();
+                const keywords = getCategoryKeywords(categoryName);
+                return keywords.some(keyword => position.includes(keyword.toLowerCase()));
+            });
+            setFilteredCandidates(filtered);
+        } else {
+            setFilteredCandidates(candidates);
+        }
+    }, [category, candidates]);
+
+    // 默认职位分类配置
+    const defaultPositionCategories = [
+        { id: 'tech', name: '技术开发', color: '#1890ff', keywords: ['开发', '工程师', '程序员', '架构师', '技术', '前端', '后端', '全栈', 'Java', 'Python', 'JavaScript', 'React', 'Vue', 'Node', 'Go', 'C++', '算法', '数据', 'AI', '人工智能', '测试', 'QA', '运维', 'DevOps'] },
+        { id: 'design', name: '产品设计', color: '#52c41a', keywords: ['产品', '设计', 'UI', 'UX', '交互', '视觉', '平面', '设计师', '产品经理', 'PM', 'Figma', 'Sketch'] },
+        { id: 'marketing', name: '运营推广', color: '#fa8c16', keywords: ['运营', '推广', '营销', '市场', '新媒体', '内容', '编辑', '文案', '策划', '活动', '品牌', '公关', 'SEO', 'SEM'] },
+        { id: 'sales', name: '销售商务', color: '#eb2f96', keywords: ['销售', '商务', '客户', 'BD', '渠道', '大客户', 'KA', '区域'] },
+        { id: 'hr', name: '人力资源', color: '#722ed1', keywords: ['人事', 'HR', '招聘', '培训', '薪酬', '绩效', 'HRBP'] },
+        { id: 'finance', name: '财务金融', color: '#13c2c2', keywords: ['财务', '会计', '出纳', '审计', '税务', '投资', '融资', '风控'] },
+        { id: 'admin', name: '管理行政', color: '#faad14', keywords: ['管理', '行政', '助理', '秘书', '总经理', '总监', '经理', '项目管理', 'PMO'] },
+        { id: 'other', name: '其他职位', color: '#8c8c8c', keywords: ['其他', '实习', '兼职', '顾问', '客服'] }
+    ];
+
+    // 从localStorage获取职位分类配置
+    const getPositionCategories = () => {
+        const savedCategories = localStorage.getItem('positionCategories');
+        if (savedCategories) {
+            try {
+                const parsed = JSON.parse(savedCategories);
+                return parsed.length > 0 ? parsed : defaultPositionCategories;
+            } catch (error) {
+                console.error('解析职位分类数据失败:', error);
+                return defaultPositionCategories;
+            }
+        }
+        return defaultPositionCategories;
+    };
+
+    // 获取职位分类的关键词
+    const getCategoryKeywords = (categoryName: string): string[] => {
+        const categories = getPositionCategories();
+        const category = categories.find((cat: any) => cat.name === categoryName);
+        return category ? category.keywords : [];
+    };
+
 
     // 处理编辑
     const handleEdit = (record: Candidate) => {
@@ -268,94 +345,6 @@ const CandidateList: React.FC = () => {
             },
         },
         {
-            title: '技能',
-            dataIndex: 'skills',
-            key: 'skills',
-            render: (skills: string[]) => {
-                const skillColors = ['var(--accent-blue)', 'var(--accent-green)', 'var(--accent-purple)', 'var(--accent-orange)', 'var(--accent-cyan)'];
-
-                return (
-                    <div>
-                        {skills.slice(0, 2).map((skill, index) => (
-                            <Tag
-                                key={skill}
-                                style={{
-                                    backgroundColor: skillColors[index % skillColors.length],
-                                    color: '#fff',
-                                    border: 'none',
-                                    fontSize: '11px'
-                                }}
-                            >
-                                {skill}
-                            </Tag>
-                        ))}
-                        {skills.length > 2 && (
-                            <Tag style={{
-                                backgroundColor: 'var(--bg-tertiary)',
-                                color: 'var(--text-secondary)',
-                                border: '1px solid var(--border-color)',
-                                fontSize: '11px'
-                            }}>
-                                +{skills.length - 2}
-                            </Tag>
-                        )}
-                    </div>
-                );
-            },
-        },
-        {
-            title: '状态',
-            key: 'status',
-            render: (record: Candidate) => {
-                const status = typeof record.status === 'string' ? record.status : '未知';
-                let color = 'default';
-                let style: React.CSSProperties = {};
-
-                switch (status) {
-                    case '已面试':
-                        color = 'green';
-                        style = {
-                            backgroundColor: 'var(--success-color)',
-                            color: '#fff',
-                            border: 'none'
-                        };
-                        break;
-                    case '待面试':
-                        color = 'orange';
-                        style = {
-                            backgroundColor: 'var(--warning-color)',
-                            color: '#fff',
-                            border: 'none'
-                        };
-                        break;
-                    case '初筛通过':
-                        color = 'blue';
-                        style = {
-                            backgroundColor: 'var(--accent-blue)',
-                            color: '#fff',
-                            border: 'none'
-                        };
-                        break;
-                    case '已录用':
-                        color = 'purple';
-                        style = {
-                            backgroundColor: 'var(--accent-purple)',
-                            color: '#fff',
-                            border: 'none'
-                        };
-                        break;
-                    default:
-                        style = {
-                            backgroundColor: 'var(--bg-tertiary)',
-                            color: 'var(--text-secondary)',
-                            border: '1px solid var(--border-color)'
-                        };
-                }
-
-                return <Tag color={color} style={style}>{status}</Tag>;
-            },
-        },
-        {
             title: '上传时间',
             key: 'uploadTime',
             render: (record: Candidate) => {
@@ -447,12 +436,23 @@ const CandidateList: React.FC = () => {
         onChange: setSelectedRowKeys,
     };
 
-    const filteredCandidates = candidates.filter(candidate => {
+    // 判断候选人是否属于某个职位分类
+    const matchesCategory = (candidate: Candidate, categoryName: string): boolean => {
+        if (!categoryName) return true;
+        if (!candidate.position) return categoryName === '其他职位';
+
+        const position = candidate.position.toLowerCase();
+        const keywords = getCategoryKeywords(categoryName);
+        return keywords.some(keyword => position.includes(keyword.toLowerCase()));
+    };
+
+    // 应用搜索和职位分类筛选
+    const finalFilteredCandidates = filteredCandidates.filter(candidate => {
         const matchesSearch = candidate.name.includes(searchText) ||
             (candidate.position && candidate.position.includes(searchText)) ||
             (candidate.skills && candidate.skills.some(skill => skill.includes(searchText)));
-        const matchesStatus = !statusFilter || candidate.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        const matchesCategoryFilter = matchesCategory(candidate, categoryFilter);
+        return matchesSearch && matchesCategoryFilter;
     }).map((candidate, index) => ({
         ...candidate,
         // 保持原始ID，但为Table的rowKey提供备用方案
@@ -494,14 +494,14 @@ const CandidateList: React.FC = () => {
                     </Col>
                     <Col xs={24} sm={12} md={4}>
                         <Select
-                            placeholder="状态筛选"
+                            placeholder="职位分类"
                             style={{
                                 width: '100%',
                                 backgroundColor: 'var(--bg-primary)',
                                 color: 'var(--text-primary)'
                             }}
-                            value={statusFilter}
-                            onChange={setStatusFilter}
+                            value={categoryFilter || undefined}
+                            onChange={(val) => setCategoryFilter(val || '')}
                             allowClear
                             size="small"
                             styles={{
@@ -527,56 +527,23 @@ const CandidateList: React.FC = () => {
                                     {menu}
                                 </div>
                             )}
-                            className="status-filter-select"
+                            className="category-filter-select"
                         >
-                            <Option
-                                value="初筛通过"
-                                style={{
-                                    backgroundColor: 'var(--card-bg)',
-                                    color: 'var(--text-primary)',
-                                    opacity: 1,
-                                    visibility: 'visible',
-                                    display: 'block'
-                                }}
-                            >
-                                <span style={{ color: 'var(--text-primary)' }}>初筛通过</span>
-                            </Option>
-                            <Option
-                                value="待面试"
-                                style={{
-                                    backgroundColor: 'var(--card-bg)',
-                                    color: 'var(--text-primary)',
-                                    opacity: 1,
-                                    visibility: 'visible',
-                                    display: 'block'
-                                }}
-                            >
-                                <span style={{ color: 'var(--text-primary)' }}>待面试</span>
-                            </Option>
-                            <Option
-                                value="已面试"
-                                style={{
-                                    backgroundColor: 'var(--card-bg)',
-                                    color: 'var(--text-primary)',
-                                    opacity: 1,
-                                    visibility: 'visible',
-                                    display: 'block'
-                                }}
-                            >
-                                <span style={{ color: 'var(--text-primary)' }}>已面试</span>
-                            </Option>
-                            <Option
-                                value="已录用"
-                                style={{
-                                    backgroundColor: 'var(--card-bg)',
-                                    color: 'var(--text-primary)',
-                                    opacity: 1,
-                                    visibility: 'visible',
-                                    display: 'block'
-                                }}
-                            >
-                                <span style={{ color: 'var(--text-primary)' }}>已录用</span>
-                            </Option>
+                            {getPositionCategories().map((cat: { id: string; name: string; color: string }) => (
+                                <Option
+                                    key={cat.id}
+                                    value={cat.name}
+                                    style={{
+                                        backgroundColor: 'var(--card-bg)',
+                                        color: 'var(--text-primary)',
+                                        opacity: 1,
+                                        visibility: 'visible',
+                                        display: 'block'
+                                    }}
+                                >
+                                    <span style={{ color: cat.color || 'var(--text-primary)' }}>{cat.name}</span>
+                                </Option>
+                            ))}
                         </Select>
                     </Col>
                     <Col xs={24} sm={24} md={12}>
@@ -584,14 +551,26 @@ const CandidateList: React.FC = () => {
                             <Button
                                 type="primary"
                                 icon={<PlusOutlined />}
-                                onClick={() => navigate('/upload')}
+                                onClick={() => setUploadModalVisible(true)}
                                 size="small"
                             >
                                 上传简历
                             </Button>
+                            {isBackgroundParsing && (
+                                <span style={{
+                                    color: 'var(--primary-color)',
+                                    fontSize: '12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}>
+                                    <Spin size="small" />
+                                    后台解析中...
+                                </span>
+                            )}
                             <Button
                                 icon={<ReloadOutlined />}
-                                onClick={loadCandidates}
+                                onClick={() => loadCandidates()}
                                 loading={loading}
                                 size="small"
                             >
@@ -615,6 +594,7 @@ const CandidateList: React.FC = () => {
                 </Row>
             </Card>
 
+
             {/* 表格区域 */}
             <Card
                 size="small"
@@ -630,16 +610,17 @@ const CandidateList: React.FC = () => {
                 <Spin spinning={loading}>
                     <Table
                         columns={columns}
-                        dataSource={filteredCandidates}
+                        dataSource={finalFilteredCandidates}
                         rowSelection={rowSelection}
                         rowKey={(record) => record._tableKey || record.id || `candidate-${record.name || 'unknown'}`}
                         size="small"
-                        scroll={{ y: 'calc(100vh - 200px)' }}
+                        scroll={{ y: 'calc(100vh - 280px)' }}
                         pagination={{
-                            total: filteredCandidates.length,
-                            pageSize: 20,
+                            total: finalFilteredCandidates.length,
+                            defaultPageSize: 20,
                             showSizeChanger: true,
                             showQuickJumper: true,
+                            pageSizeOptions: ['10', '20', '50', '100'],
                             showTotal: (total, range) =>
                                 `第 ${range[0]}-${range[1]} 条/共 ${total} 条`,
                             size: 'small',
@@ -661,12 +642,28 @@ const CandidateList: React.FC = () => {
                 </Spin>
             </Card>
 
+
             {/* 编辑模态框 */}
             <CandidateEditModal
                 visible={editModalVisible}
                 candidate={editingCandidate}
                 onCancel={handleEditCancel}
                 onSave={handleEditSave}
+            />
+
+            {/* 上传简历模态框 */}
+            <UploadResumeModal
+                visible={uploadModalVisible}
+                onClose={() => setUploadModalVisible(false)}
+                onSuccess={() => {
+                    loadCandidates(false); // 静默刷新候选人列表（不显示加载状态）
+                }}
+                onParsingStart={() => {
+                    setIsBackgroundParsing(true);
+                }}
+                onParsingComplete={() => {
+                    setIsBackgroundParsing(false);
+                }}
             />
         </div>
     );
