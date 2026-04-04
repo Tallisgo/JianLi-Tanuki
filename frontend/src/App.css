@@ -49,6 +49,11 @@ code {
   background: #a8a8a8;
 }
 
+/* 侧边栏隐藏滚动条 */
+.ant-layout-sider::-webkit-scrollbar {
+  display: none;
+}
+
 /* 卡片阴影效果 */
 .ant-card {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);

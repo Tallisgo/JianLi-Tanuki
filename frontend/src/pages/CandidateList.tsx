@@ -47,59 +47,6 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
     const [batchUploadModalVisible, setBatchUploadModalVisible] = useState(false);
     const [isBackgroundParsing, setIsBackgroundParsing] = useState(false);
 
-    // 职位分类映射
-    const categoryMap: Record<string, string> = {
-        'tech': '技术开发',
-        'design': '产品设计',
-        'marketing': '运营推广',
-        'sales': '销售商务',
-        'hr': '人力资源',
-        'finance': '财务金融',
-        'admin': '管理行政',
-        'other': '其他职位'
-    };
-
-    // 加载候选人数据
-    const loadCandidates = async (showLoading: boolean = true) => {
-        if (showLoading) {
-            setLoading(true);
-        }
-        try {
-            const data = await apiService.getCandidates();
-            setCandidates(data);
-            setFilteredCandidates(data);
-        } catch (error) {
-            message.error('加载候选人数据失败');
-        } finally {
-            if (showLoading) {
-                setLoading(false);
-            }
-        }
-    };
-
-    // 组件挂载时加载数据
-    useEffect(() => {
-        loadCandidates();
-    }, []);
-
-    // 根据URL参数自动筛选
-    useEffect(() => {
-        if (category && categoryMap[category]) {
-            const categoryName = categoryMap[category];
-            // 根据职位分类筛选候选人
-            const filtered = candidates.filter(candidate => {
-                if (!candidate.position) return categoryName === '其他职位';
-
-                const position = candidate.position.toLowerCase();
-                const keywords = getCategoryKeywords(categoryName);
-                return keywords.some(keyword => position.includes(keyword.toLowerCase()));
-            });
-            setFilteredCandidates(filtered);
-        } else {
-            setFilteredCandidates(candidates);
-        }
-    }, [category, candidates]);
-
     // 默认职位分类配置
     const defaultPositionCategories = [
         { id: 'tech', name: '技术开发', color: '#1890ff', keywords: ['开发', '工程师', '程序员', '架构师', '技术', '前端', '后端', '全栈', 'Java', 'Python', 'JavaScript', 'React', 'Vue', 'Node', 'Go', 'C++', '算法', '数据', 'AI', '人工智能', '测试', 'QA', '运维', 'DevOps'] },
@@ -130,9 +77,60 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
     // 获取职位分类的关键词
     const getCategoryKeywords = (categoryName: string): string[] => {
         const categories = getPositionCategories();
-        const category = categories.find((cat: any) => cat.name === categoryName);
-        return category ? category.keywords : [];
+        const cat = categories.find((c: any) => c.name === categoryName);
+        return cat ? cat.keywords : [];
     };
+
+    // 动态构建职位分类映射（key → name，支持用户自定义分类）
+    const buildCategoryMap = (): Record<string, string> => {
+        const categories = getPositionCategories();
+        const map: Record<string, string> = {};
+        categories.forEach((cat: any) => {
+            map[cat.key || cat.id] = cat.name;
+        });
+        return map;
+    };
+
+    // 加载候选人数据
+    const loadCandidates = async (showLoading: boolean = true) => {
+        if (showLoading) {
+            setLoading(true);
+        }
+        try {
+            const data = await apiService.getCandidates();
+            setCandidates(data);
+            setFilteredCandidates(data);
+        } catch (error) {
+            message.error('加载候选人数据失败');
+        } finally {
+            if (showLoading) {
+                setLoading(false);
+            }
+        }
+    };
+
+    // 组件挂载时加载数据
+    useEffect(() => {
+        loadCandidates();
+    }, []);
+
+    // 根据URL参数自动筛选
+    useEffect(() => {
+        const categoryMap = buildCategoryMap();
+        if (category && categoryMap[category]) {
+            const categoryName = categoryMap[category];
+            const filtered = candidates.filter(candidate => {
+                if (!candidate.position) return categoryName === '其他职位';
+
+                const position = candidate.position.toLowerCase();
+                const keywords = getCategoryKeywords(categoryName);
+                return keywords.some(keyword => position.includes(keyword.toLowerCase()));
+            });
+            setFilteredCandidates(filtered);
+        } else {
+            setFilteredCandidates(candidates);
+        }
+    }, [category, candidates]);
 
 
     // 处理编辑

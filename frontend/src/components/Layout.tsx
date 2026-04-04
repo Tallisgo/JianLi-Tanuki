@@ -26,7 +26,38 @@ import {
     WarningOutlined,
     CloseCircleOutlined,
     DeleteOutlined,
-    EyeOutlined
+    EyeOutlined,
+    CodeOutlined,
+    BankOutlined,
+    ShopOutlined,
+    CustomerServiceOutlined,
+    BookOutlined,
+    MedicineBoxOutlined,
+    CarOutlined,
+    GlobalOutlined,
+    SafetyOutlined,
+    ExperimentOutlined,
+    CameraOutlined,
+    SoundOutlined,
+    RocketOutlined,
+    TrophyOutlined,
+    HeartOutlined,
+    ThunderboltOutlined,
+    AppstoreOutlined,
+    CloudOutlined,
+    DatabaseOutlined,
+    ApiOutlined,
+    BulbOutlined,
+    HomeOutlined,
+    EnvironmentOutlined,
+    PhoneOutlined,
+    MailOutlined,
+    StarOutlined,
+    FlagOutlined,
+    FireOutlined,
+    CoffeeOutlined,
+    GiftOutlined,
+    SmileOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
@@ -316,7 +347,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         }));
     };
 
-    // 获取图标组件
     const getIconComponent = (iconName: string) => {
         const iconMap: Record<string, React.ReactNode> = {
             'LaptopOutlined': <LaptopOutlined />,
@@ -326,7 +356,39 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             'UsergroupAddOutlined': <UsergroupAddOutlined />,
             'DollarOutlined': <DollarOutlined />,
             'FileTextOutlined': <FileTextOutlined />,
-            'ToolOutlined': <ToolOutlined />
+            'ToolOutlined': <ToolOutlined />,
+            'CodeOutlined': <CodeOutlined />,
+            'BankOutlined': <BankOutlined />,
+            'ShopOutlined': <ShopOutlined />,
+            'CustomerServiceOutlined': <CustomerServiceOutlined />,
+            'BookOutlined': <BookOutlined />,
+            'MedicineBoxOutlined': <MedicineBoxOutlined />,
+            'CarOutlined': <CarOutlined />,
+            'GlobalOutlined': <GlobalOutlined />,
+            'SafetyOutlined': <SafetyOutlined />,
+            'ExperimentOutlined': <ExperimentOutlined />,
+            'CameraOutlined': <CameraOutlined />,
+            'SoundOutlined': <SoundOutlined />,
+            'RocketOutlined': <RocketOutlined />,
+            'TrophyOutlined': <TrophyOutlined />,
+            'HeartOutlined': <HeartOutlined />,
+            'ThunderboltOutlined': <ThunderboltOutlined />,
+            'AppstoreOutlined': <AppstoreOutlined />,
+            'CloudOutlined': <CloudOutlined />,
+            'DatabaseOutlined': <DatabaseOutlined />,
+            'ApiOutlined': <ApiOutlined />,
+            'BulbOutlined': <BulbOutlined />,
+            'HomeOutlined': <HomeOutlined />,
+            'EnvironmentOutlined': <EnvironmentOutlined />,
+            'PhoneOutlined': <PhoneOutlined />,
+            'MailOutlined': <MailOutlined />,
+            'StarOutlined': <StarOutlined />,
+            'FlagOutlined': <FlagOutlined />,
+            'FireOutlined': <FireOutlined />,
+            'CoffeeOutlined': <CoffeeOutlined />,
+            'GiftOutlined': <GiftOutlined />,
+            'SmileOutlined': <SmileOutlined />,
+            'TeamOutlined': <TeamOutlined />,
         };
         return iconMap[iconName] || <UserOutlined />;
     };
@@ -631,7 +693,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     style={{
                         background: 'var(--sidebar-bg)',
                         boxShadow: 'var(--shadow)',
-                        height: '100%'
+                        height: '100%',
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        scrollbarWidth: 'none',
                     }}
                 >
                     <Menu
@@ -644,7 +709,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         style={{
                             borderRight: 0,
                             marginTop: '16px',
-                            height: '100%'
                         }}
                     />
                 </Sider>
