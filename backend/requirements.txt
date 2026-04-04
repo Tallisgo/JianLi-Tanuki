@@ -14,3 +14,4 @@ pydantic-settings==2.1.0
 PyJWT==2.8.0
 email-validator==2.1.0
 markitdown[docx]
+openpyxl==3.1.5

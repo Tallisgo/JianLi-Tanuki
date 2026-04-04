@@ -377,6 +377,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
                 "email": resume_info.get("email"),
                 "address": resume_info.get("address"),
                 "summary": resume_info.get("summary"),
+                "notes": resume_info.get("other"),
                 "skills": resume_info.get("skills"),
                 "languages": resume_info.get("languages"),
                 "certifications": resume_info.get("certifications"),

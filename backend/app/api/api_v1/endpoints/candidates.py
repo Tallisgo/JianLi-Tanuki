@@ -1,12 +1,20 @@
 """
 候选人管理API端点
 """
+import uuid
+import logging
+from datetime import datetime
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Query
+
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from app.services.candidate_service import candidate_service
 from app.services.database_service import db_service
+from app.models.resume import (
+    ResumeInfo, ContactInfo, TaskStatus, UploadTask,
+)
 from database.models.candidate import CandidateModel
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/", response_model=List[Dict[str, Any]], summary="获取所有候选人")
@@ -333,3 +341,106 @@ async def delete_candidate(candidate_id: int):
             status_code=500,
             detail=f"删除候选人失败: {str(e)}"
         )
+
+
+@router.post("/import-excel", summary="从 Excel 批量导入候选人")
+async def import_candidates_from_excel(file: UploadFile = File(...)):
+    """
+    从 Excel 文件批量导入候选人（轻量导入，不走简历解析）。
+
+    Excel 格式要求：第一行为表头，包含「姓名」「电话」列，其余列内容合并写入备注。
+    """
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="仅支持 .xlsx / .xls 格式")
+
+    try:
+        import openpyxl
+        from io import BytesIO
+
+        content = await file.read()
+        wb = openpyxl.load_workbook(BytesIO(content), read_only=True)
+        ws = wb.active
+
+        headers = [str(cell.value).strip() if cell.value else "" for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+        name_col = _find_col(headers, ["姓名", "名字", "name"])
+        phone_col = _find_col(headers, ["电话", "手机", "phone", "tel"])
+
+        if name_col is None:
+            raise HTTPException(status_code=400, detail="未找到「姓名」列，请检查表头")
+
+        note_cols = [
+            i for i in range(len(headers))
+            if i != name_col and i != phone_col and headers[i]
+        ]
+
+        success_count = 0
+        skip_count = 0
+        errors: List[str] = []
+
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            row = list(row)
+            name = str(row[name_col]).strip() if name_col < len(row) and row[name_col] else ""
+            if not name:
+                skip_count += 1
+                continue
+
+            phone = str(row[phone_col]).strip() if phone_col is not None and phone_col < len(row) and row[phone_col] else None
+            if phone:
+                phone = phone.replace(".0", "")
+
+            note_parts = []
+            for ci in note_cols:
+                if ci < len(row) and row[ci]:
+                    val = str(row[ci]).strip()
+                    if val:
+                        note_parts.append(f"{headers[ci]}: {val}")
+            notes_text = "\n".join(note_parts) if note_parts else None
+
+            try:
+                task_id = str(uuid.uuid4())
+                task = UploadTask(
+                    id=task_id,
+                    filename=f"excel_import_{file.filename}",
+                    file_path="",
+                    file_size=0,
+                    file_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    status=TaskStatus.UPLOADED,
+                )
+                db_service.create_task(task)
+
+                resume_info = ResumeInfo(
+                    name=name,
+                    contact=ContactInfo(phone=phone) if phone else None,
+                    other=notes_text,
+                )
+                db_service.update_task_status(
+                    task_id, TaskStatus.COMPLETED, progress=100, result=resume_info
+                )
+                success_count += 1
+            except Exception as e:
+                logger.warning("导入第 %d 行失败: %s", row_idx, e)
+                errors.append(f"第{row_idx}行({name}): {str(e)}")
+
+        wb.close()
+
+        return {
+            "message": f"导入完成：成功 {success_count} 条，跳过 {skip_count} 条",
+            "success": success_count,
+            "skipped": skip_count,
+            "errors": errors[:20],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Excel 导入失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"导入失败: {str(e)}")
+
+
+def _find_col(headers: List[str], candidates: List[str]) -> Optional[int]:
+    """在表头中按关键词模糊匹配列索引"""
+    for i, h in enumerate(headers):
+        hl = h.lower()
+        for kw in candidates:
+            if kw.lower() in hl:
+                return i
+    return None

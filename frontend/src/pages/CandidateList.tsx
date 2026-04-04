@@ -19,7 +19,8 @@ import {
     EyeOutlined,
     DownloadOutlined,
     ReloadOutlined,
-    UploadOutlined
+    UploadOutlined,
+    FileExcelOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { apiService, type Candidate } from '../services/api';
@@ -563,6 +564,36 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                                 size="small"
                             >
                                 批量上传
+                            </Button>
+                            <Button
+                                icon={<FileExcelOutlined />}
+                                onClick={() => {
+                                    const input = document.createElement('input');
+                                    input.type = 'file';
+                                    input.accept = '.xlsx,.xls';
+                                    input.onchange = async (e) => {
+                                        const file = (e.target as HTMLInputElement).files?.[0];
+                                        if (!file) return;
+                                        const hide = message.loading('正在导入...', 0);
+                                        try {
+                                            const res = await apiService.importCandidatesFromExcel(file);
+                                            hide();
+                                            message.success(res.message);
+                                            if (res.errors?.length) {
+                                                message.warning(`${res.errors.length} 条导入异常，请查看控制台`);
+                                                console.warn('导入异常详情:', res.errors);
+                                            }
+                                            loadCandidates();
+                                        } catch (err: any) {
+                                            hide();
+                                            message.error(err.message || '导入失败');
+                                        }
+                                    };
+                                    input.click();
+                                }}
+                                size="small"
+                            >
+                                导入Excel
                             </Button>
                             {isBackgroundParsing && (
                                 <span style={{
