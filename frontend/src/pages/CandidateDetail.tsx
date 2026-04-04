@@ -28,7 +28,7 @@ import CandidateEditModal from '../components/CandidateEditModal';
 const { Title, Paragraph } = Typography;
 
 const CandidateDetail: React.FC = () => {
-    const { id } = useParams<{ id: string }>();
+    const { slug: id } = useParams<{ slug: string }>();
     const navigate = useNavigate();
     const [candidate, setCandidate] = useState<Candidate | null>(null);
     const [loading, setLoading] = useState(false);
