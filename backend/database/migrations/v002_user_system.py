@@ -38,7 +38,7 @@ SQL_COMMANDS = [
     ) VALUES (
         'admin', 
         'admin@jianli-tanuki.com', 
-        'scrypt:32768:8:1$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4/LewdBPj4', 
+        'scrypt:16384:8:1$f4502336f4e84356$dbee0c4d292c4b03ea5453589037438293f4f407809528e78133bf6fad063104', 
         '系统管理员', 
         'admin', 
         'active', 

@@ -19,6 +19,8 @@ class UploadTaskModel(BaseModel):
                  progress: int = 0,
                  result: Optional[str] = None,
                  error: Optional[str] = None,
+                 original_markdown: Optional[str] = None,
+                 processed_data: Optional[str] = None,
                  created_at: Optional[datetime] = None,
                  updated_at: Optional[datetime] = None,
                  completed_at: Optional[datetime] = None,
@@ -33,6 +35,8 @@ class UploadTaskModel(BaseModel):
         self.progress = progress
         self.result = result
         self.error = error
+        self.original_markdown = original_markdown
+        self.processed_data = processed_data
         self.created_at = created_at or datetime.now()
         self.updated_at = updated_at
         self.completed_at = completed_at
@@ -49,6 +53,8 @@ class UploadTaskModel(BaseModel):
             "progress": self.progress,
             "result": self.result,
             "error": self.error,
+            "original_markdown": self.original_markdown,
+            "processed_data": self.processed_data,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None
@@ -57,7 +63,6 @@ class UploadTaskModel(BaseModel):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'UploadTaskModel':
         """从字典创建实例"""
-        # 处理时间字段
         created_at = None
         if data.get("created_at"):
             if isinstance(data["created_at"], str):
@@ -89,6 +94,8 @@ class UploadTaskModel(BaseModel):
             progress=data.get("progress", 0),
             result=data.get("result"),
             error=data.get("error"),
+            original_markdown=data.get("original_markdown"),
+            processed_data=data.get("processed_data"),
             created_at=created_at,
             updated_at=updated_at,
             completed_at=completed_at
@@ -106,6 +113,8 @@ class UploadTaskModel(BaseModel):
             self.progress,
             self.result,
             self.error,
+            self.original_markdown,
+            self.processed_data,
             self.created_at.isoformat(),
             self.updated_at.isoformat() if self.updated_at else None,
             self.completed_at.isoformat() if self.completed_at else None
@@ -114,6 +123,18 @@ class UploadTaskModel(BaseModel):
     @classmethod
     def from_row(cls, row) -> 'UploadTaskModel':
         """从数据库行创建实例"""
+        # 兼容旧数据库（可能没有新列）
+        original_markdown = None
+        processed_data = None
+        try:
+            original_markdown = row["original_markdown"]
+        except (IndexError, KeyError):
+            pass
+        try:
+            processed_data = row["processed_data"]
+        except (IndexError, KeyError):
+            pass
+
         return cls(
             id=row["id"],
             filename=row["filename"],
@@ -124,6 +145,8 @@ class UploadTaskModel(BaseModel):
             progress=row["progress"],
             result=row["result"],
             error=row["error"],
+            original_markdown=original_markdown,
+            processed_data=processed_data,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
             updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
             completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None
