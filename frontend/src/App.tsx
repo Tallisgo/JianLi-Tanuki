@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import Layout from './components/Layout';
@@ -44,6 +44,31 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+const DEFAULT_CATEGORY_KEYS = ['tech', 'design', 'marketing', 'sales', 'hr', 'finance', 'admin', 'other'];
+
+const CandidateRouteHandler: React.FC = () => {
+  const { slug } = useParams<{ slug: string }>();
+
+  if (!slug) return <CandidateList />;
+
+  let categoryKeys = DEFAULT_CATEGORY_KEYS;
+  try {
+    const saved = localStorage.getItem('positionCategories');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        categoryKeys = parsed.map((cat: any) => cat.key || cat.id);
+      }
+    }
+  } catch { /* use defaults */ }
+
+  if (categoryKeys.includes(slug)) {
+    return <CandidateList category={slug} />;
+  }
+
+  return <CandidateDetail />;
+};
+
 const App: React.FC = () => {
   return (
     <ConfigProvider locale={zhCN}>
@@ -65,15 +90,7 @@ const App: React.FC = () => {
                     <Routes>
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/candidates" element={<CandidateList />} />
-                      <Route path="/candidates/tech" element={<CandidateList category="tech" />} />
-                      <Route path="/candidates/design" element={<CandidateList category="design" />} />
-                      <Route path="/candidates/marketing" element={<CandidateList category="marketing" />} />
-                      <Route path="/candidates/sales" element={<CandidateList category="sales" />} />
-                      <Route path="/candidates/hr" element={<CandidateList category="hr" />} />
-                      <Route path="/candidates/finance" element={<CandidateList category="finance" />} />
-                      <Route path="/candidates/admin" element={<CandidateList category="admin" />} />
-                      <Route path="/candidates/other" element={<CandidateList category="other" />} />
-                      <Route path="/candidates/:id" element={<CandidateDetail />} />
+                      <Route path="/candidates/:slug" element={<CandidateRouteHandler />} />
                       <Route path="/profile" element={<Profile />} />
                       <Route path="/users" element={<UserManagement />} />
                       <Route path="/help" element={<Help />} />
