@@ -17,8 +17,10 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
         """创建任务记录"""
         sql = f"""
         INSERT INTO {self.table_name} 
-        (id, filename, file_path, file_size, file_type, status, progress, result, error, created_at, updated_at, completed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, filename, file_path, file_size, file_type, status, progress,
+         result, error, original_markdown, processed_data,
+         created_at, updated_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         try:
             self.connection.execute_update(sql, model.to_tuple())
@@ -58,7 +60,8 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
         sql = f"""
         UPDATE {self.table_name} 
         SET filename = ?, file_path = ?, file_size = ?, file_type = ?, 
-            status = ?, progress = ?, result = ?, error = ?, 
+            status = ?, progress = ?, result = ?, error = ?,
+            original_markdown = ?, processed_data = ?,
             updated_at = ?, completed_at = ?
         WHERE id = ?
         """
@@ -66,6 +69,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             params = (
                 model.filename, model.file_path, model.file_size, model.file_type,
                 model.status, model.progress, model.result, model.error,
+                model.original_markdown, model.processed_data,
                 model.updated_at.isoformat() if model.updated_at else None,
                 model.completed_at.isoformat() if model.completed_at else None,
                 model.id
@@ -172,6 +176,20 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             return False
         
         task.update_status(status.value, progress, result, error)
+        return self.update(task)
+    
+    def update_markdown_and_data(self, id: str, original_markdown: str = None,
+                                 processed_data: str = None) -> bool:
+        """更新原始 Markdown 和结构化数据"""
+        task = self.get_by_id(id)
+        if not task:
+            return False
+        
+        if original_markdown is not None:
+            task.original_markdown = original_markdown
+        if processed_data is not None:
+            task.processed_data = processed_data
+        task.updated_at = __import__("datetime").datetime.now()
         return self.update(task)
     
     def get_statistics(self) -> Dict[str, int]:
