@@ -664,7 +664,7 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                 visible={uploadModalVisible}
                 onClose={() => setUploadModalVisible(false)}
                 onSuccess={() => {
-                    loadCandidates(false); // 静默刷新候选人列表（不显示加载状态）
+                    loadCandidates(false);
                 }}
                 onParsingStart={() => {
                     setIsBackgroundParsing(true);
@@ -672,6 +672,7 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                 onParsingComplete={() => {
                     setIsBackgroundParsing(false);
                 }}
+                defaultCategory={category}
             />
 
             {/* 批量上传模态框 */}
@@ -681,6 +682,7 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                 onSuccess={() => {
                     loadCandidates(false);
                 }}
+                defaultCategory={category}
             />
         </div>
     );

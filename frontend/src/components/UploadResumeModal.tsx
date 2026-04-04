@@ -42,6 +42,7 @@ interface UploadResumeModalProps {
     onSuccess?: () => void;
     onParsingStart?: () => void;
     onParsingComplete?: () => void;
+    defaultCategory?: string;
 }
 
 interface UploadProgress {
@@ -66,7 +67,8 @@ const UploadResumeModal: React.FC<UploadResumeModalProps> = ({
     onClose,
     onSuccess,
     onParsingStart,
-    onParsingComplete
+    onParsingComplete,
+    defaultCategory
 }) => {
     const navigate = useNavigate();
     const { addNotification } = useNotifications();
@@ -106,6 +108,19 @@ const UploadResumeModal: React.FC<UploadResumeModalProps> = ({
         }
         return defaultPositionCategories;
     };
+
+    // 弹窗打开时根据当前分类页自动预设职位分类
+    React.useEffect(() => {
+        if (visible && defaultCategory) {
+            const categories = getPositionCategories();
+            const matched = categories.find(
+                (cat: any) => (cat.key || cat.id) === defaultCategory
+            );
+            if (matched) {
+                setSelectedCategory(matched.name);
+            }
+        }
+    }, [visible, defaultCategory]);
 
     // 重置状态
     const resetState = () => {
