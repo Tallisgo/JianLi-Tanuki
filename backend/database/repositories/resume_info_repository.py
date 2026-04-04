@@ -4,6 +4,9 @@
 from typing import List, Optional, Dict, Any
 from database.repositories.base_repository import BaseRepository
 from database.models.resume_info import ResumeInfoModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
     """简历信息数据访问层"""
@@ -24,7 +27,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
             self.connection.execute_update(sql, model.to_tuple())
             return True
         except Exception as e:
-            print(f"创建简历信息失败: {e}")
+            logger.error(f"创建简历信息失败: {e}")
             return False
     
     def get_by_id(self, id: int) -> Optional[ResumeInfoModel]:
@@ -36,7 +39,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
                 return ResumeInfoModel.from_row(rows[0])
             return None
         except Exception as e:
-            print(f"获取简历信息失败: {e}")
+            logger.error(f"获取简历信息失败: {e}")
             return None
     
     def get_by_task_id(self, task_id: str) -> Optional[ResumeInfoModel]:
@@ -48,7 +51,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
                 return ResumeInfoModel.from_row(rows[0])
             return None
         except Exception as e:
-            print(f"根据任务ID获取简历信息失败: {e}")
+            logger.error(f"根据任务ID获取简历信息失败: {e}")
             return None
     
     def get_all(self, limit: int = 100, offset: int = 0) -> List[ResumeInfoModel]:
@@ -62,7 +65,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
             rows = self.connection.execute_query(sql, (limit, offset))
             return [ResumeInfoModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"获取简历信息列表失败: {e}")
+            logger.error(f"获取简历信息列表失败: {e}")
             return []
     
     def update(self, model: ResumeInfoModel) -> bool:
@@ -86,7 +89,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
             affected_rows = self.connection.execute_update(sql, params)
             return affected_rows > 0
         except Exception as e:
-            print(f"更新简历信息失败: {e}")
+            logger.error(f"更新简历信息失败: {e}")
             return False
     
     def delete(self, id: int) -> bool:
@@ -96,7 +99,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
             affected_rows = self.connection.execute_update(sql, (id,))
             return affected_rows > 0
         except Exception as e:
-            print(f"删除简历信息失败: {e}")
+            logger.error(f"删除简历信息失败: {e}")
             return False
     
     def delete_by_task_id(self, task_id: str) -> bool:
@@ -106,7 +109,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
             affected_rows = self.connection.execute_update(sql, (task_id,))
             return affected_rows > 0
         except Exception as e:
-            print(f"根据任务ID删除简历信息失败: {e}")
+            logger.error(f"根据任务ID删除简历信息失败: {e}")
             return False
     
     def count(self) -> int:
@@ -116,7 +119,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
             rows = self.connection.execute_query(sql)
             return rows[0]["count"] if rows else 0
         except Exception as e:
-            print(f"获取简历信息总数失败: {e}")
+            logger.error(f"获取简历信息总数失败: {e}")
             return 0
     
     def search(self, filters: Dict[str, Any], limit: int = 100, offset: int = 0) -> List[ResumeInfoModel]:
@@ -156,7 +159,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
             rows = self.connection.execute_query(sql, tuple(params))
             return [ResumeInfoModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"搜索简历信息失败: {e}")
+            logger.error(f"搜索简历信息失败: {e}")
             return []
     
     def get_by_name(self, name: str, limit: int = 100, offset: int = 0) -> List[ResumeInfoModel]:
@@ -172,7 +175,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
                 return ResumeInfoModel.from_row(rows[0])
             return None
         except Exception as e:
-            print(f"根据电话号码获取简历信息失败: {e}")
+            logger.error(f"根据电话号码获取简历信息失败: {e}")
             return None
     
     def get_by_email(self, email: str) -> Optional[ResumeInfoModel]:
@@ -184,7 +187,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
                 return ResumeInfoModel.from_row(rows[0])
             return None
         except Exception as e:
-            print(f"根据邮箱获取简历信息失败: {e}")
+            logger.error(f"根据邮箱获取简历信息失败: {e}")
             return None
     
     def get_skills_statistics(self) -> Dict[str, int]:
@@ -216,7 +219,7 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
             return dict(sorted_skills[:20])  # 返回前20个热门技能
             
         except Exception as e:
-            print(f"获取技能统计失败: {e}")
+            logger.error(f"获取技能统计失败: {e}")
             return {}
     
     def create_or_update_from_resume_info(self, task_id: str, resume_info_data: Dict[str, Any]) -> bool:
@@ -238,5 +241,5 @@ class ResumeInfoRepository(BaseRepository[ResumeInfoModel]):
                 return self.create(new_resume)
                 
         except Exception as e:
-            print(f"创建或更新简历信息失败: {e}")
+            logger.error(f"创建或更新简历信息失败: {e}")
             return False

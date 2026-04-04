@@ -5,6 +5,9 @@ from typing import List, Optional, Dict, Any
 from database.repositories.base_repository import BaseRepository
 from database.models.upload_task import UploadTaskModel
 from app.models.resume import TaskStatus
+import logging
+
+logger = logging.getLogger(__name__)
 
 class UploadTaskRepository(BaseRepository[UploadTaskModel]):
     """上传任务数据访问层"""
@@ -26,7 +29,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             self.connection.execute_update(sql, model.to_tuple())
             return True
         except Exception as e:
-            print(f"创建任务失败: {e}")
+            logger.error(f"创建任务失败: {e}")
             return False
     
     def get_by_id(self, id: str) -> Optional[UploadTaskModel]:
@@ -38,7 +41,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
                 return UploadTaskModel.from_row(rows[0])
             return None
         except Exception as e:
-            print(f"获取任务失败: {e}")
+            logger.error(f"获取任务失败: {e}")
             return None
     
     def get_all(self, limit: int = 100, offset: int = 0) -> List[UploadTaskModel]:
@@ -52,7 +55,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             rows = self.connection.execute_query(sql, (limit, offset))
             return [UploadTaskModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"获取任务列表失败: {e}")
+            logger.error(f"获取任务列表失败: {e}")
             return []
     
     def update(self, model: UploadTaskModel) -> bool:
@@ -77,7 +80,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             affected_rows = self.connection.execute_update(sql, params)
             return affected_rows > 0
         except Exception as e:
-            print(f"更新任务失败: {e}")
+            logger.error(f"更新任务失败: {e}")
             return False
     
     def delete(self, id: str) -> bool:
@@ -87,7 +90,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             affected_rows = self.connection.execute_update(sql, (id,))
             return affected_rows > 0
         except Exception as e:
-            print(f"删除任务失败: {e}")
+            logger.error(f"删除任务失败: {e}")
             return False
     
     def count(self) -> int:
@@ -97,7 +100,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             rows = self.connection.execute_query(sql)
             return rows[0]["count"] if rows else 0
         except Exception as e:
-            print(f"获取任务总数失败: {e}")
+            logger.error(f"获取任务总数失败: {e}")
             return 0
     
     def search(self, filters: Dict[str, Any], limit: int = 100, offset: int = 0) -> List[UploadTaskModel]:
@@ -133,7 +136,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             rows = self.connection.execute_query(sql, tuple(params))
             return [UploadTaskModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"搜索任务失败: {e}")
+            logger.error(f"搜索任务失败: {e}")
             return []
     
     def get_by_status(self, status: TaskStatus, limit: int = 100, offset: int = 0) -> List[UploadTaskModel]:
@@ -165,7 +168,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             ))
             return [UploadTaskModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"获取处理中任务失败: {e}")
+            logger.error(f"获取处理中任务失败: {e}")
             return []
     
     def update_status(self, id: str, status: TaskStatus, progress: int = None, 
@@ -228,5 +231,5 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             return {"total": 0, "completed": 0, "failed": 0, "processing": 0, "success_rate": 0}
             
         except Exception as e:
-            print(f"获取任务统计失败: {e}")
+            logger.error(f"获取任务统计失败: {e}")
             return {"total": 0, "completed": 0, "failed": 0, "processing": 0, "success_rate": 0}

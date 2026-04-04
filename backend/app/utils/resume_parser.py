@@ -5,12 +5,15 @@ import os
 import re
 import json
 import asyncio
+import logging
 from typing import Dict, Any, Optional, Tuple
 import requests
 from pathlib import Path
 
 from app.core.config import settings
 from app.models.resume import ResumeInfo, ContactInfo, EducationInfo, WorkExperience, ProjectInfo
+
+logger = logging.getLogger(__name__)
 
 # markitdown 用于 PDF/DOCX → Markdown 转换
 from markitdown import MarkItDown
@@ -103,7 +106,7 @@ class ResumeParser:
 
     async def parse_file(self, file_path: str) -> ResumeInfo:
         """解析简历文件，返回结构化信息"""
-        print(f"开始解析文件: {file_path}")
+        logger.info(f"开始解析文件: {file_path}")
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
@@ -116,20 +119,20 @@ class ResumeParser:
             if not markdown_text.strip():
                 raise ValueError("未能从文件中提取到任何文本内容")
 
-            print(f"提取到文本 ({len(markdown_text)} 字符)")
+            logger.info(f"提取到文本 ({len(markdown_text)} 字符)")
 
             resume_info = await self._complete_json(markdown_text)
 
-            print(f"文件解析完成: {file_path}")
+            logger.info(f"文件解析完成: {file_path}")
             return resume_info
 
         except Exception as e:
-            print(f"解析文件失败 {file_path}: {e}")
+            logger.error(f"解析文件失败 {file_path}: {e}")
             raise
 
     async def parse_file_with_markdown(self, file_path: str) -> Tuple[ResumeInfo, str]:
         """解析简历文件，同时返回原始 Markdown 文本（用于存储）"""
-        print(f"开始解析文件: {file_path}")
+        logger.info(f"开始解析文件: {file_path}")
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
@@ -142,15 +145,15 @@ class ResumeParser:
             if not markdown_text.strip():
                 raise ValueError("未能从文件中提取到任何文本内容")
 
-            print(f"提取到文本 ({len(markdown_text)} 字符)")
+            logger.info(f"提取到文本 ({len(markdown_text)} 字符)")
 
             resume_info = await self._complete_json(markdown_text)
 
-            print(f"文件解析完成: {file_path}")
+            logger.info(f"文件解析完成: {file_path}")
             return resume_info, markdown_text
 
         except Exception as e:
-            print(f"解析文件失败 {file_path}: {e}")
+            logger.error(f"解析文件失败 {file_path}: {e}")
             raise
 
     # ------------------------------------------------------------------
@@ -167,9 +170,9 @@ class ResumeParser:
             text = await asyncio.to_thread(self._sync_markitdown_extract, file_path)
             if len(text.strip()) >= 50:
                 return text
-            print(f"markitdown 提取内容过少({len(text.strip())}字)，切换到 OCR")
+            logger.warning(f"markitdown 提取内容过少({len(text.strip())}字)，切换到 OCR")
         except Exception as e:
-            print(f"markitdown 提取失败: {e}，切换到 OCR")
+            logger.warning(f"markitdown 提取失败: {e}，切换到 OCR")
 
         if file_ext == ".pdf":
             return await self._extract_pdf_with_ocr(file_path)
@@ -225,7 +228,7 @@ class ResumeParser:
         - 鲁棒 JSON 提取
         """
         if not self.api_key:
-            print("警告: SILICONFLOW_API_KEY 未设置，返回模拟数据")
+            logger.warning("SILICONFLOW_API_KEY 未设置，返回模拟数据")
             return self._get_mock_resume_info()
 
         user_content = text
@@ -238,10 +241,10 @@ class ResumeParser:
 
                 if self._appears_truncated(raw_response):
                     if attempt < retries:
-                        print(f"检测到 JSON 截断（第{attempt + 1}次），重试...")
+                        logger.warning(f"检测到 JSON 截断（第{attempt + 1}次），重试...")
                         user_content = text + "\n\n[重要：请输出完整的 JSON，不要截断]"
                         continue
-                    print("JSON 截断但已达最大重试次数，尝试解析部分内容")
+                    logger.warning("JSON 截断但已达最大重试次数，尝试解析部分内容")
 
                 parsed_data = self._extract_json(raw_response)
                 resume_info = self._convert_to_resume_info(parsed_data)
@@ -249,16 +252,16 @@ class ResumeParser:
                 issues = self._validate_resume_info(resume_info)
                 if not issues or attempt == retries:
                     if issues:
-                        print(f"解析结果校验警告(已重试): {issues}")
+                        logger.warning(f"解析结果校验警告(已重试): {issues}")
                     return resume_info
 
-                print(f"解析结果校验不通过: {issues}，进行第{attempt + 2}次尝试")
+                logger.warning(f"解析结果校验不通过: {issues}，进行第{attempt + 2}次尝试")
                 user_content = text + f"\n\n[重要提示：上次解析缺少以下关键信息: {', '.join(issues)}。请务必完整提取。]"
 
             except Exception as e:
                 last_error = e
                 if attempt < retries:
-                    print(f"LLM 第{attempt + 1}次解析失败: {e}，重试中...")
+                    logger.error(f"LLM 第{attempt + 1}次解析失败: {e}，重试中...")
                     continue
                 raise
 
@@ -405,7 +408,7 @@ class ResumeParser:
         try:
             return ResumeInfo.model_validate(data)
         except Exception as e:
-            print(f"model_validate 失败，尝试手动转换: {e}")
+            logger.warning(f"model_validate 失败，尝试手动转换: {e}")
             return self._manual_convert(data)
 
     def _manual_convert(self, data: Dict[str, Any]) -> ResumeInfo:

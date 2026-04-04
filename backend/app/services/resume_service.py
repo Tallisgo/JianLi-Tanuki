@@ -1,10 +1,13 @@
 """
 简历解析服务
 """
+import logging
 from app.models.resume import TaskStatus, ResumeInfo
 from app.services.task_service import TaskService
 from app.services.database_service import db_service
 from app.utils.resume_parser import ResumeParser
+
+logger = logging.getLogger(__name__)
 
 class ResumeService:
     """简历解析服务类"""
@@ -46,18 +49,18 @@ class ResumeService:
         try:
             task = await self.task_service.get_task(task_id)
             if not task:
-                print(f"任务不存在: {task_id}")
+                logger.error(f"任务不存在: {task_id}")
                 return
             
             await self.task_service.update_task_status(
                 task_id, TaskStatus.PARSING, progress=0
             )
             
-            print(f"开始解析任务: {task_id}")
+            logger.info(f"开始解析任务: {task_id}")
             
             # 使用新的 parse_file_with_markdown 同时获取结构化结果和原始 Markdown
             result, original_markdown = await self.parser.parse_file_with_markdown(task.file_path)
-            print(f"解析结果: 姓名={result.name}")
+            logger.info(f"解析结果: 姓名={result.name}")
             
             # 检查重复候选人
             if result.name and not force_update:
@@ -67,7 +70,7 @@ class ResumeService:
                 duplicate = self._find_exact_duplicate(result.name, phone, email)
                 
                 if duplicate:
-                    print(f"发现严格匹配的重复候选人: {result.name} (ID: {duplicate.id})")
+                    logger.info(f"发现严格匹配的重复候选人: {result.name} (ID: {duplicate.id})")
                     
                     import json
                     duplicate_info = json.dumps({
@@ -90,10 +93,10 @@ class ResumeService:
                 result=result, original_markdown=original_markdown
             )
             
-            print(f"任务解析完成: {task_id}, 候选人: {result.name}")
+            logger.info(f"任务解析完成: {task_id}, 候选人: {result.name}")
             
         except Exception as e:
-            print(f"任务解析失败 {task_id}: {e}")
+            logger.error(f"任务解析失败 {task_id}: {e}")
             
             await self.task_service.update_task_status(
                 task_id, TaskStatus.FAILED, error=str(e)
@@ -104,12 +107,12 @@ class ResumeService:
         try:
             task = await self.task_service.get_task(task_id)
             if not task:
-                print(f"任务不存在: {task_id}")
+                logger.error(f"任务不存在: {task_id}")
                 return
             
             candidate = db_service.get_candidate(candidate_id)
             if not candidate:
-                print(f"候选人不存在: {candidate_id}")
+                logger.error(f"候选人不存在: {candidate_id}")
                 await self.task_service.update_task_status(
                     task_id, TaskStatus.FAILED, error="候选人不存在"
                 )
@@ -119,7 +122,7 @@ class ResumeService:
                 task_id, TaskStatus.PARSING, progress=0
             )
             
-            print(f"开始更新候选人 {candidate.name} (ID: {candidate_id}) 的简历")
+            logger.info(f"开始更新候选人 {candidate.name} (ID: {candidate_id}) 的简历")
             
             result, original_markdown = await self.parser.parse_file_with_markdown(task.file_path)
             
@@ -133,14 +136,14 @@ class ResumeService:
                     task_id, TaskStatus.COMPLETED, progress=100,
                     result=result, original_markdown=original_markdown
                 )
-                print(f"候选人 {candidate.name} 简历更新完成")
+                logger.info(f"候选人 {candidate.name} 简历更新完成")
             else:
                 await self.task_service.update_task_status(
                     task_id, TaskStatus.FAILED, error="保存候选人信息失败"
                 )
             
         except Exception as e:
-            print(f"更新简历失败 {task_id}: {e}")
+            logger.error(f"更新简历失败 {task_id}: {e}")
             await self.task_service.update_task_status(
                 task_id, TaskStatus.FAILED, error=str(e)
             )

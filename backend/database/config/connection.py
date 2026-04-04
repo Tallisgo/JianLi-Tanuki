@@ -6,6 +6,9 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Generator, Optional
 from database.config.database_config import db_config, DatabaseType
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DatabaseConnection:
     """数据库连接管理器"""
@@ -79,7 +82,7 @@ class DatabaseConnection:
                 cursor.execute("SELECT 1")
                 return True
         except Exception as e:
-            print(f"数据库连接检查失败: {e}")
+            logger.error(f"数据库连接检查失败: {e}")
             return False
     
     def get_database_info(self) -> dict:
