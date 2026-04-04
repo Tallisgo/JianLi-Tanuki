@@ -35,10 +35,10 @@ async def upload_resume(
     - force_update: 如果候选人已存在，是否强制更新
     """
     # 验证文件类型
-    if file.content_type not in settings.ALLOWED_FILE_TYPES:
+    if file.content_type not in settings.allowed_file_types_list:
         raise HTTPException(
             status_code=400,
-            detail=f"不支持的文件类型: {file.content_type}。支持的类型: {', '.join(settings.ALLOWED_FILE_TYPES)}"
+            detail=f"不支持的文件类型: {file.content_type}。支持的类型: {', '.join(settings.allowed_file_types_list)}"
         )
     
     # 验证文件大小
@@ -225,7 +225,7 @@ async def update_candidate_resume(
     - **file**: 新的简历文件
     """
     # 验证文件类型
-    if file.content_type not in settings.ALLOWED_FILE_TYPES:
+    if file.content_type not in settings.allowed_file_types_list:
         raise HTTPException(
             status_code=400,
             detail=f"不支持的文件类型: {file.content_type}"

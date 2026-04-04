@@ -5,8 +5,35 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from app.models.resume import TaskResponse, ErrorResponse
 from app.services.task_service import TaskService
+from app.services.database_service import db_service
 
 router = APIRouter()
+
+@router.get("/statistics", summary="获取任务统计")
+async def get_task_statistics():
+    """获取任务统计信息，包括总数、本月新增、待处理、已完成等"""
+    try:
+        stats = db_service.get_task_statistics()
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        all_tasks = db_service.get_all_tasks(limit=10000)
+        this_month = sum(
+            1 for t in all_tasks
+            if t.created_at and t.created_at >= month_start
+        )
+        
+        return {
+            "total": stats.get("total", 0),
+            "completed": stats.get("completed", 0),
+            "failed": stats.get("failed", 0),
+            "processing": stats.get("processing", 0),
+            "success_rate": stats.get("success_rate", 0),
+            "this_month": this_month,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取统计失败: {str(e)}")
 
 @router.get("/", response_model=List[TaskResponse], summary="获取所有任务")
 async def get_all_tasks(
@@ -29,7 +56,7 @@ async def get_all_tasks(
                 filename=task.filename,
                 status=task.status,
                 progress=task.progress,
-                result=task.result.dict() if task.result else None,
+                result=task.result.model_dump() if task.result else None,
                 error=task.error,
                 created_at=task.created_at.isoformat(),
                 updated_at=task.updated_at.isoformat() if task.updated_at else None,
@@ -65,7 +92,7 @@ async def get_task(task_id: str):
             filename=task.filename,
             status=task.status,
             progress=task.progress,
-            result=task.result.dict() if task.result else None,
+            result=task.result.model_dump() if task.result else None,
             error=task.error,
             created_at=task.created_at.isoformat(),
             updated_at=task.updated_at.isoformat() if task.updated_at else None,

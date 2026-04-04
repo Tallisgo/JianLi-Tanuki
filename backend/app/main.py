@@ -1,11 +1,22 @@
 """
 简历解析后端应用主入口
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.api_v1.api import api_router
 from app.services.database_service import db_service
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理（替代已弃用的 on_event）"""
+    db_service.init_database()
+    print(f"{settings.PROJECT_NAME} v{settings.VERSION} 启动成功")
+    print(f"API文档: http://localhost:{settings.PORT}/docs")
+    yield
+
 
 def create_app() -> FastAPI:
     """创建FastAPI应用实例"""
@@ -14,20 +25,19 @@ def create_app() -> FastAPI:
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
         description="智能简历解析系统后端API",
-        openapi_url="/openapi.json"
+        openapi_url="/openapi.json",
+        lifespan=lifespan,
     )
     
-    # 配置CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["Content-Disposition"],  # 暴露文件下载头给前端
+        expose_headers=["Content-Disposition"],
     )
     
-    # 添加根路径
     @app.get("/")
     async def root():
         return {
@@ -37,20 +47,10 @@ def create_app() -> FastAPI:
             "api": settings.API_V1_STR
         }
     
-    # 注册API路由
     app.include_router(api_router, prefix=settings.API_V1_STR)
-    
-    # 初始化数据库
-    @app.on_event("startup")
-    async def startup_event():
-        """应用启动时初始化"""
-        db_service.init_database()
-        print(f"🚀 {settings.PROJECT_NAME} v{settings.VERSION} 启动成功")
-        print(f"📊 API文档: http://localhost:{settings.PORT}/docs")
     
     return app
 
-# 创建应用实例
 app = create_app()
 
 if __name__ == "__main__":

@@ -51,7 +51,8 @@ class TaskService:
         return self.db_service.get_all_tasks(limit=limit, offset=offset)
     
     async def update_task_status(self, task_id: str, status: TaskStatus, 
-                                progress: int = None, result=None, error: str = None) -> bool:
+                                progress: int = None, result=None, error: str = None,
+                                original_markdown: str = None) -> bool:
         """
         更新任务状态
         
@@ -61,11 +62,15 @@ class TaskService:
             progress: 进度
             result: 解析结果
             error: 错误信息
+            original_markdown: 原始 Markdown 文本
             
         Returns:
             是否更新成功
         """
-        return self.db_service.update_task_status(task_id, status, progress, result, error)
+        return self.db_service.update_task_status(
+            task_id, status, progress, result, error,
+            original_markdown=original_markdown
+        )
     
     async def delete_task(self, task_id: str) -> bool:
         """

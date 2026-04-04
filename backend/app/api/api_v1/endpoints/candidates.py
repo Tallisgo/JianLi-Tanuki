@@ -4,6 +4,7 @@
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Query
 from app.services.candidate_service import candidate_service
+from app.services.database_service import db_service
 from database.models.candidate import CandidateModel
 
 router = APIRouter()
@@ -275,6 +276,40 @@ async def get_skills_statistics():
             status_code=500,
             detail=f"获取技能统计失败: {str(e)}"
         )
+
+@router.put("/{candidate_id}", summary="更新候选人信息")
+async def update_candidate(candidate_id: int, updates: Dict[str, Any]):
+    """
+    更新候选人基本信息（姓名、联系方式、教育、技能等）
+    """
+    try:
+        candidate = await candidate_service.get_candidate(candidate_id)
+        if not candidate:
+            raise HTTPException(status_code=404, detail="候选人不存在")
+        
+        allowed_fields = [
+            "name", "phone", "email", "address", "position",
+            "education_level", "school", "major", "skills",
+            "summary", "notes", "status"
+        ]
+        for key, value in updates.items():
+            if key in allowed_fields and hasattr(candidate, key):
+                if key == "skills" and isinstance(value, list):
+                    import json
+                    value = json.dumps(value, ensure_ascii=False)
+                setattr(candidate, key, value)
+        
+        from datetime import datetime
+        candidate.updated_at = datetime.now()
+        success = db_service.update_candidate(candidate)
+        if not success:
+            raise HTTPException(status_code=500, detail="更新失败")
+        
+        return candidate.to_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新候选人失败: {str(e)}")
 
 @router.delete("/{candidate_id}", summary="删除候选人")
 async def delete_candidate(candidate_id: int):
