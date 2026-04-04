@@ -87,7 +87,7 @@ class FileService:
         Returns:
             是否为支持的文件类型
         """
-        return content_type in settings.ALLOWED_FILE_TYPES
+        return content_type in settings.allowed_file_types_list
     
     def validate_file_size(self, file_size: int) -> bool:
         """

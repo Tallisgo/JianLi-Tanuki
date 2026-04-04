@@ -1,425 +1,473 @@
 """
-简历解析工具
+简历解析工具 - 使用 markitdown 统一转换 + LLM JSON 增强提取
 """
 import os
+import re
 import json
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 import requests
-from rapidocr import RapidOCR
-import fitz  # PyMuPDF
-from docx import Document
-from PIL import Image
-import io
+from pathlib import Path
 
 from app.core.config import settings
 from app.models.resume import ResumeInfo, ContactInfo, EducationInfo, WorkExperience, ProjectInfo
 
-class ResumeParser:
-    """简历解析器"""
-    
-    def __init__(self):
-        self.api_key = settings.SILICONFLOW_API_KEY
-        self.api_url = settings.SILICONFLOW_API_URL
-        self.ocr = RapidOCR()
-        
-        # 系统提示词
-        self.system_prompt = """
-你是一个专业的简历信息提取专家。你的任务是从OCR工具提取的简历文本中，准确识别并结构化候选人的关键信息。OCR文本可能包含拼写错误、格式混乱或缺失内容，请基于上下文进行智能解析和标准化。
+# markitdown 用于 PDF/DOCX → Markdown 转换
+from markitdown import MarkItDown
 
-请从输入文本中提取以下信息，并以JSON格式输出。如果某些信息无法找到，请使用`null`或空字符串表示。输出必须严格遵循下面的JSON结构。
+# OCR 作为终极降级
+from rapidocr import RapidOCR
+import fitz  # PyMuPDF（仅用于 OCR 降级时渲染页面为图片）
 
-**重要提示**：
-- 教育背景：请提取所有教育经历，包括本科、硕士、博士等，按时间倒序排列（最新的在前）
-- 时间格式：入学时间和毕业时间请使用4位年份格式（如"2018"、"2021"）
-- 学位信息：请准确识别学位类型（如"学士学位"、"硕士学位"、"博士学位"等）
-- 学校名称：请提取完整的学校名称
-- GPA信息：如果简历中有GPA或成绩信息，请一并提取
 
-需要提取的字段：
-- **姓名**（全名）
-- **联系方式**：包括电话和邮箱（如果多个，取主要的一个）
-- **教育背景**：列表形式，每个项目包括学位、学校、专业、入学时间、毕业时间、GPA（如有）
-- **工作经历**：列表形式，每个项目包括职位、公司、工作时间、工作描述（简要）
-- **项目经验**：列表形式，每个项目包括项目名称、描述、技术栈
-- **技能**：数组形式，列出关键技能（如编程语言、工具等）
-- **语言能力**：数组形式
-- **证书**：数组形式
-- **个人简介**：简要描述
-- **其他信息**：如证书、项目经验、语言能力等（可选，如有则包含）
+SYSTEM_PROMPT = """\
+你是一个专业的简历 JSON 提取引擎。你的唯一任务是从简历文本中提取结构化信息并输出 **纯 JSON**，不要附加任何解释。
 
-输出示例：
+请严格按照以下 JSON 结构输出。如果某字段无法找到，使用 null 或空数组。
+
 {
-    "name": "张三",
+    "name": "姓名",
     "contact": {
-        "phone": "13800138000",
-        "email": "zhangsan@example.com",
-        "address": "北京市朝阳区"
+        "phone": "电话",
+        "email": "邮箱",
+        "address": "地址"
     },
     "education": [
         {
-            "degree": "硕士学位",
-            "institution": "清华大学",
-            "major": "计算机科学与技术",
+            "degree": "学位",
+            "institution": "学校",
+            "major": "专业",
             "start_year": "2018",
             "end_year": "2021",
             "gpa": "3.8/4.0"
-        },
-        {
-            "degree": "学士学位",
-            "institution": "北京理工大学",
-            "major": "软件工程",
-            "start_year": "2014",
-            "end_year": "2018",
-            "gpa": "3.6/4.0"
         }
     ],
     "experience": [
         {
-            "title": "软件工程师",
-            "company": "科技公司",
+            "title": "职位",
+            "company": "公司",
             "start_date": "2020-07",
             "end_date": "2022-12",
-            "description": "负责开发Web应用...",
-            "location": "北京"
+            "description": "工作描述",
+            "location": "地点"
         }
     ],
     "projects": [
         {
-            "name": "电商系统",
-            "description": "开发了一个完整的电商平台",
-            "technologies": ["React", "Node.js", "MongoDB"],
+            "name": "项目名称",
+            "description": "项目描述",
+            "technologies": ["技术1", "技术2"],
             "start_date": "2021-01",
             "end_date": "2021-06"
         }
     ],
-    "skills": ["Python", "Java", "机器学习"],
-    "languages": ["英语六级", "普通话"],
-    "certifications": ["PMP证书"],
-    "summary": "具有3年软件开发经验...",
-    "other": "其他相关信息"
+    "skills": ["技能1", "技能2"],
+    "languages": ["语言1"],
+    "certifications": ["证书1"],
+    "summary": "个人简介",
+    "other": "其他信息"
 }
 
-请开始处理输入文本，并输出JSON结果。
+重要规则：
+- 教育背景按时间倒序（最新在前），提取所有学历
+- 时间格式：年份用4位数字，月份用 YYYY-MM 格式
+- 输出必须是合法的 JSON，不要包含注释或多余文本
+- 只输出 JSON，不要输出任何其他内容\
 """
-    
+
+
+class ResumeParser:
+    """简历解析器"""
+
+    def __init__(self):
+        self.api_key = settings.SILICONFLOW_API_KEY
+        self.api_url = settings.SILICONFLOW_API_URL
+        self._ocr: Optional[RapidOCR] = None
+        self._markitdown: Optional[MarkItDown] = None
+
+    @property
+    def ocr(self) -> RapidOCR:
+        if self._ocr is None:
+            self._ocr = RapidOCR()
+        return self._ocr
+
+    @property
+    def markitdown(self) -> MarkItDown:
+        if self._markitdown is None:
+            self._markitdown = MarkItDown()
+        return self._markitdown
+
+    # ------------------------------------------------------------------
+    # 公开接口
+    # ------------------------------------------------------------------
+
     async def parse_file(self, file_path: str) -> ResumeInfo:
-        """
-        解析简历文件
-        
-        Args:
-            file_path: 文件路径
-            
-        Returns:
-            解析后的简历信息
-        """
+        """解析简历文件，返回结构化信息"""
         print(f"开始解析文件: {file_path}")
-        
-        # 检查文件是否存在
+
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
-        
-        # 根据文件类型选择解析方法
-        file_extension = os.path.splitext(file_path)[1].lower()
-        
+
+        file_ext = os.path.splitext(file_path)[1].lower()
+
         try:
-            if file_extension == '.pdf':
-                text = await self._extract_pdf_text(file_path)
-            elif file_extension in ['.doc', '.docx']:
-                text = await self._extract_word_text(file_path)
-            elif file_extension in ['.jpg', '.jpeg', '.png']:
-                text = await self._extract_image_text(file_path)
-            else:
-                raise ValueError(f"不支持的文件类型: {file_extension}")
-            
-            if not text.strip():
+            markdown_text = await self._extract_text(file_path, file_ext)
+
+            if not markdown_text.strip():
                 raise ValueError("未能从文件中提取到任何文本内容")
-            
-            print(text)
-            
-            # 使用LLM解析文本
-            resume_info = await self._parse_with_llm(text)
-            
+
+            print(f"提取到文本 ({len(markdown_text)} 字符)")
+
+            resume_info = await self._complete_json(markdown_text)
+
             print(f"文件解析完成: {file_path}")
             return resume_info
-            
+
         except Exception as e:
             print(f"解析文件失败 {file_path}: {e}")
             raise
-    
-    async def _extract_pdf_text(self, file_path: str) -> str:
-        """提取PDF文本"""
-        try:
-            doc = fitz.open(file_path)
-            text = ""
-            
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                text += page.get_text()
-            
-            doc.close()
-            return text
-            
-        except Exception as e:
-            print(f"PDF文本提取失败: {e}")
-            # 如果文本提取失败，尝试OCR
-            return await self._extract_pdf_with_ocr(file_path)
-    
-    async def _extract_pdf_with_ocr(self, file_path: str) -> str:
-        """使用OCR提取PDF文本"""
-        try:
-            doc = fitz.open(file_path)
-            all_text = []
-            
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                
-                # 将页面转换为图片
-                mat = fitz.Matrix(2.0, 2.0)  # 提高分辨率
-                pix = page.get_pixmap(matrix=mat)
-                img_data = pix.tobytes("png")
-                
-                # 使用OCR识别
-                result = self.ocr(img_data)
-                if result and len(result) > 0:
-                    page_text = ' '.join([item[1] for item in result[0]])
-                    all_text.append(f"=== 第{page_num + 1}页 ===\n{page_text}")
-            
-            doc.close()
-            return '\n\n'.join(all_text)
-            
-        except Exception as e:
-            print(f"PDF OCR提取失败: {e}")
-            raise
-    
-    async def _extract_word_text(self, file_path: str) -> str:
-        """提取Word文档文本"""
-        try:
-            doc = Document(file_path)
-            text = ""
-            
-            for paragraph in doc.paragraphs:
-                text += paragraph.text + "\n"
-            
-            return text
-            
-        except Exception as e:
-            print(f"Word文档文本提取失败: {e}")
-            raise
-    
-    async def _extract_image_text(self, file_path: str) -> str:
-        """提取图片文本"""
-        try:
-            result = self.ocr(file_path)
-            
-            if result and len(result) > 0:
-                # 合并所有识别到的文本
-                all_text = ' '.join([item[1] for item in result[0]])
-                return all_text
-            else:
-                return ""
-                
-        except Exception as e:
-            print(f"图片OCR提取失败: {e}")
-            raise
-    
-    def _enhance_education_extraction(self, text: str) -> str:
-        """增强教育背景提取的预处理"""
-        # 添加教育背景相关的关键词提示
-        education_keywords = [
-            "教育背景", "教育经历", "学历", "学位", "毕业", "入学", "大学", "学院", "学校",
-            "本科", "硕士", "博士", "学士", "研究生", "GPA", "成绩", "专业", "院系"
-        ]
-        
-        # 检查文本中是否包含教育相关信息
-        has_education = any(keyword in text for keyword in education_keywords)
-        
-        if has_education:
-            return text + "\n\n[注意：请仔细提取所有教育经历，包括完整的入学时间、毕业时间、学位、学校、专业和GPA信息]"
-        
-        return text
 
-    async def _parse_with_llm(self, text: str) -> ResumeInfo:
-        """使用LLM解析文本"""
-        if not self.api_key:
-            print("警告: SILICONFLOW_API_KEY环境变量未设置，返回模拟数据")
-            return self._get_mock_resume_info()
-        
+    async def parse_file_with_markdown(self, file_path: str) -> Tuple[ResumeInfo, str]:
+        """解析简历文件，同时返回原始 Markdown 文本（用于存储）"""
+        print(f"开始解析文件: {file_path}")
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"文件不存在: {file_path}")
+
+        file_ext = os.path.splitext(file_path)[1].lower()
+
         try:
-            # 增强教育背景提取
-            enhanced_text = self._enhance_education_extraction(text)
-            
-            payload = {
-                "model": settings.LLM_MODEL,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": self.system_prompt
-                    },
-                    {
-                        "role": "user",
-                        "content": enhanced_text
-                    }
-                ],
-                "max_tokens": settings.MAX_TOKENS,
-                "temperature": settings.LLM_TEMPERATURE,
-                "top_p": settings.LLM_TOP_P
-            }
-            
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            response = requests.post(self.api_url, json=payload, headers=headers)
-            response.raise_for_status()
-            
-            result = response.json()
-            
-            # 提取LLM返回的文本
-            if 'choices' in result and len(result['choices']) > 0:
-                llm_text = result['choices'][0]['message']['content']
-            elif 'content' in result and len(result['content']) > 0:
-                llm_text = result['content'][0]['text']
-            else:
-                raise ValueError("LLM响应格式不正确")
-            
-            # 尝试解析JSON
-            try:
-                # 清理LLM返回的文本，提取JSON部分
-                json_start = llm_text.find('{')
-                json_end = llm_text.rfind('}') + 1
-                
-                if json_start != -1 and json_end > json_start:
-                    json_text = llm_text[json_start:json_end]
-                    parsed_data = json.loads(json_text)
-                else:
-                    raise ValueError("未找到有效的JSON格式")
-                
-            except json.JSONDecodeError as e:
-                print(f"JSON解析失败: {e}")
-                print(f"LLM返回的文本: {llm_text}")
-                raise ValueError(f"LLM返回的文本不是有效的JSON格式: {e}")
-            
-            # 转换为ResumeInfo对象
-            return self._convert_to_resume_info(parsed_data)
-            
-        except requests.RequestException as e:
-            print(f"LLM API请求失败: {e}")
-            raise
+            markdown_text = await self._extract_text(file_path, file_ext)
+
+            if not markdown_text.strip():
+                raise ValueError("未能从文件中提取到任何文本内容")
+
+            print(f"提取到文本 ({len(markdown_text)} 字符)")
+
+            resume_info = await self._complete_json(markdown_text)
+
+            print(f"文件解析完成: {file_path}")
+            return resume_info, markdown_text
+
         except Exception as e:
-            print(f"LLM解析失败: {e}")
+            print(f"解析文件失败 {file_path}: {e}")
             raise
-    
+
+    # ------------------------------------------------------------------
+    # 文档转文本：markitdown 主路径 + OCR 降级
+    # ------------------------------------------------------------------
+
+    async def _extract_text(self, file_path: str, file_ext: str) -> str:
+        """统一文本提取入口"""
+        if file_ext in (".jpg", ".jpeg", ".png"):
+            return await self._extract_image_text(file_path)
+
+        # PDF / DOCX / DOC → markitdown
+        try:
+            text = await asyncio.to_thread(self._sync_markitdown_extract, file_path)
+            if len(text.strip()) >= 50:
+                return text
+            print(f"markitdown 提取内容过少({len(text.strip())}字)，切换到 OCR")
+        except Exception as e:
+            print(f"markitdown 提取失败: {e}，切换到 OCR")
+
+        if file_ext == ".pdf":
+            return await self._extract_pdf_with_ocr(file_path)
+
+        raise ValueError(f"无法提取文件内容: {file_path}")
+
+    def _sync_markitdown_extract(self, file_path: str) -> str:
+        """使用 markitdown 将 PDF/DOCX 转为 Markdown"""
+        result = self.markitdown.convert(file_path)
+        return result.text_content
+
+    # ------------------------------------------------------------------
+    # OCR 降级路径（仅用于扫描件 PDF 和图片）
+    # ------------------------------------------------------------------
+
+    async def _extract_pdf_with_ocr(self, file_path: str) -> str:
+        return await asyncio.to_thread(self._sync_extract_pdf_with_ocr, file_path)
+
+    def _sync_extract_pdf_with_ocr(self, file_path: str) -> str:
+        doc = fitz.open(file_path)
+        all_text = []
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            mat = fitz.Matrix(2.0, 2.0)
+            pix = page.get_pixmap(matrix=mat)
+            img_data = pix.tobytes("png")
+            result = self.ocr(img_data)
+            if result and len(result) > 0:
+                page_text = " ".join([item[1] for item in result[0]])
+                all_text.append(f"=== 第{page_num + 1}页 ===\n{page_text}")
+        doc.close()
+        return "\n\n".join(all_text)
+
+    async def _extract_image_text(self, file_path: str) -> str:
+        return await asyncio.to_thread(self._sync_extract_image_text, file_path)
+
+    def _sync_extract_image_text(self, file_path: str) -> str:
+        result = self.ocr(file_path)
+        if result and len(result) > 0:
+            return " ".join([item[1] for item in result[0]])
+        return ""
+
+    # ------------------------------------------------------------------
+    # LLM JSON 提取：重试 + 截断检测 + 鲁棒 JSON 解析
+    # ------------------------------------------------------------------
+
+    async def _complete_json(self, text: str, retries: int = 2) -> ResumeInfo:
+        """
+        调用 LLM 提取结构化 JSON，借鉴 Resume-Matcher 的 complete_json 策略：
+        - JSON mode（若模型支持）
+        - 截断检测 + 重试
+        - 退避温度
+        - 鲁棒 JSON 提取
+        """
+        if not self.api_key:
+            print("警告: SILICONFLOW_API_KEY 未设置，返回模拟数据")
+            return self._get_mock_resume_info()
+
+        user_content = text
+        last_error = None
+
+        for attempt in range(retries + 1):
+            try:
+                temperature = self._get_retry_temperature(attempt)
+                raw_response = await self._call_llm(user_content, temperature)
+
+                if self._appears_truncated(raw_response):
+                    if attempt < retries:
+                        print(f"检测到 JSON 截断（第{attempt + 1}次），重试...")
+                        user_content = text + "\n\n[重要：请输出完整的 JSON，不要截断]"
+                        continue
+                    print("JSON 截断但已达最大重试次数，尝试解析部分内容")
+
+                parsed_data = self._extract_json(raw_response)
+                resume_info = self._convert_to_resume_info(parsed_data)
+
+                issues = self._validate_resume_info(resume_info)
+                if not issues or attempt == retries:
+                    if issues:
+                        print(f"解析结果校验警告(已重试): {issues}")
+                    return resume_info
+
+                print(f"解析结果校验不通过: {issues}，进行第{attempt + 2}次尝试")
+                user_content = text + f"\n\n[重要提示：上次解析缺少以下关键信息: {', '.join(issues)}。请务必完整提取。]"
+
+            except Exception as e:
+                last_error = e
+                if attempt < retries:
+                    print(f"LLM 第{attempt + 1}次解析失败: {e}，重试中...")
+                    continue
+                raise
+
+        raise last_error or ValueError("LLM 解析失败")
+
+    def _get_retry_temperature(self, attempt: int) -> float:
+        """重试时逐步升高 temperature 增加变异"""
+        base = settings.LLM_TEMPERATURE
+        return min(base + attempt * 0.15, 1.0)
+
+    def _appears_truncated(self, text: str) -> bool:
+        """检测 JSON 响应是否被截断"""
+        text = text.rstrip()
+        if not text:
+            return True
+        open_braces = text.count("{")
+        close_braces = text.count("}")
+        open_brackets = text.count("[")
+        close_brackets = text.count("]")
+        if open_braces > close_braces or open_brackets > close_brackets:
+            return True
+        if text[-1] in (",", ":", '"', "[", "{"):
+            return True
+        return False
+
+    def _extract_json(self, text: str) -> Dict[str, Any]:
+        """从可能包含解释文字的响应中鲁棒地提取 JSON 对象"""
+        text = text.strip()
+
+        # 去掉 markdown 代码块标记
+        if text.startswith("```"):
+            lines = text.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            text = "\n".join(lines)
+
+        # 直接解析
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        # 括号匹配提取最外层 JSON 对象
+        depth = 0
+        start = -1
+        for i, ch in enumerate(text):
+            if ch == "{":
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and start >= 0:
+                    try:
+                        return json.loads(text[start : i + 1])
+                    except json.JSONDecodeError:
+                        start = -1
+
+        # 最后尝试简单截取
+        json_start = text.find("{")
+        json_end = text.rfind("}") + 1
+        if json_start >= 0 and json_end > json_start:
+            try:
+                return json.loads(text[json_start:json_end])
+            except json.JSONDecodeError:
+                pass
+
+        raise ValueError(f"未找到有效 JSON，返回内容: {text[:300]}")
+
+    # ------------------------------------------------------------------
+    # LLM 调用
+    # ------------------------------------------------------------------
+
+    def _call_llm_sync(self, text: str, temperature: float) -> str:
+        """同步调用 LLM API 并返回原始文本响应"""
+        payload = {
+            "model": settings.LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+            "max_tokens": settings.MAX_TOKENS,
+            "temperature": temperature,
+            "top_p": settings.LLM_TOP_P,
+            "response_format": {"type": "json_object"},
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        response = requests.post(self.api_url, json=payload, headers=headers, timeout=120)
+        response.raise_for_status()
+        result = response.json()
+
+        if "choices" in result and len(result["choices"]) > 0:
+            return result["choices"][0]["message"]["content"]
+        elif "content" in result and len(result["content"]) > 0:
+            return result["content"][0]["text"]
+        else:
+            raise ValueError("LLM 响应格式不正确")
+
+    async def _call_llm(self, text: str, temperature: float) -> str:
+        return await asyncio.to_thread(self._call_llm_sync, text, temperature)
+
+    # ------------------------------------------------------------------
+    # 数据校验与转换
+    # ------------------------------------------------------------------
+
+    def _validate_resume_info(self, info: ResumeInfo) -> list:
+        """校验解析结果的关键字段完整性"""
+        issues = []
+        if not info.name:
+            issues.append("姓名")
+        if not info.contact or (not info.contact.phone and not info.contact.email):
+            issues.append("联系方式(电话或邮箱)")
+        if not info.education:
+            issues.append("教育背景")
+        if not info.experience:
+            issues.append("工作经历")
+        return issues
+
     def _normalize_name(self, name: Optional[str]) -> Optional[str]:
-        """
-        规范化姓名
-        - 移除中文名字中间的空格
-        - 保留英文名字中的空格
-        """
+        """规范化姓名：移除中文名字中间的空格，保留英文名空格"""
         if not name:
             return name
-        
-        # 去除首尾空格
+
         name = name.strip()
-        
-        # 判断是否为纯中文名字（可能包含少数民族名字中的·）
-        # 中文字符的Unicode范围
+
         def is_chinese_char(char):
-            return '\u4e00' <= char <= '\u9fff' or char == '·'
-        
-        # 检查名字是否主要由中文字符组成
+            return "\u4e00" <= char <= "\u9fff" or char == "·"
+
         chinese_count = sum(1 for c in name if is_chinese_char(c))
         total_letters = sum(1 for c in name if c.isalpha() or is_chinese_char(c))
-        
-        # 如果中文字符占比超过50%，认为是中文名字，移除空格
+
         if total_letters > 0 and chinese_count / total_letters > 0.5:
-            # 移除所有空格（但保留·用于少数民族名字）
-            name = ''.join(c for c in name if c != ' ')
-        
+            name = "".join(c for c in name if c != " ")
+
         return name
 
     def _convert_to_resume_info(self, data: Dict[str, Any]) -> ResumeInfo:
-        """将解析的数据转换为ResumeInfo对象"""
+        """将 LLM 返回的字典转换为 ResumeInfo（field_validator 自动容错）"""
+        data["name"] = self._normalize_name(data.get("name"))
+
         try:
-            # 规范化姓名
-            name = self._normalize_name(data.get('name'))
-            
-            # 处理联系方式
-            contact = None
-            if 'contact' in data and data['contact']:
-                contact_data = data['contact']
-                contact = ContactInfo(
-                    phone=contact_data.get('phone'),
-                    email=contact_data.get('email'),
-                    address=contact_data.get('address')
-                )
-            
-            # 处理教育背景
-            education = []
-            if 'education' in data and data['education']:
-                for edu_data in data['education']:
-                    education.append(EducationInfo(
-                        degree=edu_data.get('degree'),
-                        institution=edu_data.get('institution'),
-                        major=edu_data.get('major'),
-                        start_year=edu_data.get('start_year'),
-                        end_year=edu_data.get('end_year'),
-                        gpa=edu_data.get('gpa')
-                    ))
-            
-            # 处理工作经历
-            experience = []
-            if 'experience' in data and data['experience']:
-                for exp_data in data['experience']:
-                    experience.append(WorkExperience(
-                        title=exp_data.get('title'),
-                        company=exp_data.get('company'),
-                        start_date=exp_data.get('start_date'),
-                        end_date=exp_data.get('end_date'),
-                        description=exp_data.get('description'),
-                        location=exp_data.get('location')
-                    ))
-            
-            # 处理项目经验
-            projects = []
-            if 'projects' in data and data['projects']:
-                for proj_data in data['projects']:
-                    projects.append(ProjectInfo(
-                        name=proj_data.get('name'),
-                        description=proj_data.get('description'),
-                        technologies=proj_data.get('technologies'),
-                        start_date=proj_data.get('start_date'),
-                        end_date=proj_data.get('end_date')
-                    ))
-            
-            return ResumeInfo(
-                name=name,
-                contact=contact,
-                education=education if education else None,
-                experience=experience if experience else None,
-                projects=projects if projects else None,
-                skills=data.get('skills'),
-                languages=data.get('languages'),
-                certifications=data.get('certifications'),
-                summary=data.get('summary'),
-                other=data.get('other')
-            )
-            
+            return ResumeInfo.model_validate(data)
         except Exception as e:
-            print(f"数据转换失败: {e}")
-            raise ValueError(f"数据转换失败: {e}")
-    
+            print(f"model_validate 失败，尝试手动转换: {e}")
+            return self._manual_convert(data)
+
+    def _manual_convert(self, data: Dict[str, Any]) -> ResumeInfo:
+        """手动转换作为 model_validate 的后备"""
+        contact = None
+        if "contact" in data and data["contact"]:
+            cd = data["contact"]
+            contact = ContactInfo(
+                phone=cd.get("phone"),
+                email=cd.get("email"),
+                address=cd.get("address"),
+            )
+
+        education = None
+        if "education" in data and data["education"]:
+            education = []
+            for edu in data["education"]:
+                if isinstance(edu, dict):
+                    education.append(EducationInfo(**{k: edu.get(k) for k in
+                        ("degree", "institution", "major", "start_year", "end_year", "gpa")}))
+
+        experience = None
+        if "experience" in data and data["experience"]:
+            experience = []
+            for exp in data["experience"]:
+                if isinstance(exp, dict):
+                    experience.append(WorkExperience(**{k: exp.get(k) for k in
+                        ("title", "company", "start_date", "end_date", "description", "location")}))
+
+        projects = None
+        if "projects" in data and data["projects"]:
+            projects = []
+            for proj in data["projects"]:
+                if isinstance(proj, dict):
+                    projects.append(ProjectInfo(**{k: proj.get(k) for k in
+                        ("name", "description", "technologies", "start_date", "end_date")}))
+
+        return ResumeInfo(
+            name=data.get("name"),
+            contact=contact,
+            education=education if education else None,
+            experience=experience if experience else None,
+            projects=projects if projects else None,
+            skills=data.get("skills"),
+            languages=data.get("languages"),
+            certifications=data.get("certifications"),
+            summary=data.get("summary"),
+            other=data.get("other"),
+        )
+
+    # ------------------------------------------------------------------
+    # Mock 数据
+    # ------------------------------------------------------------------
+
     def _get_mock_resume_info(self) -> ResumeInfo:
         """返回模拟的简历信息用于测试"""
-        from app.models.resume import ContactInfo, EducationInfo, WorkExperience
-        
         return ResumeInfo(
             name="张三",
             contact=ContactInfo(
                 phone="13800138000",
                 email="zhangsan@example.com",
-                address="北京市朝阳区"
+                address="北京市朝阳区",
             ),
             education=[
                 EducationInfo(
@@ -428,7 +476,7 @@ class ResumeParser:
                     major="计算机科学与技术",
                     start_year="2018",
                     end_year="2021",
-                    gpa="3.8/4.0"
+                    gpa="3.8/4.0",
                 ),
                 EducationInfo(
                     degree="学士学位",
@@ -436,8 +484,8 @@ class ResumeParser:
                     major="软件工程",
                     start_year="2014",
                     end_year="2018",
-                    gpa="3.6/4.0"
-                )
+                    gpa="3.6/4.0",
+                ),
             ],
             experience=[
                 WorkExperience(
@@ -446,12 +494,12 @@ class ResumeParser:
                     start_date="2020-07",
                     end_date="2022-12",
                     description="负责开发Web应用，使用React和Node.js技术栈",
-                    location="北京"
+                    location="北京",
                 )
             ],
             skills=["Python", "Java", "React", "Node.js", "机器学习"],
             languages=["英语六级", "普通话"],
             certifications=["PMP证书"],
             summary="具有3年软件开发经验，熟悉前后端开发技术栈",
-            other="这是一个模拟的简历数据，用于测试系统功能"
+            other="这是一个模拟的简历数据，用于测试系统功能",
         )

@@ -26,14 +26,33 @@ class DatabaseService:
     
     def init_database(self) -> bool:
         """初始化数据库"""
-        return init_database()
+        result = init_database()
+        self._fix_admin_password_if_needed()
+        return result
+    
+    def _fix_admin_password_if_needed(self):
+        """检查并修正 admin 用户的密码哈希格式（兼容旧数据库）"""
+        try:
+            from database.repositories.user_repository import UserRepository
+            from app.services.user_service import UserService
+            user_repo = UserRepository()
+            admin = user_repo.get_by_username("admin")
+            if not admin:
+                return
+            parts = admin.password_hash.split('$') if admin.password_hash else []
+            if len(parts) != 3:
+                user_service = UserService()
+                admin.password_hash = user_service.hash_password("admin123")
+                user_repo.update(admin)
+                print("已自动修正 admin 用户的密码哈希格式")
+        except Exception as e:
+            print(f"检查 admin 密码格式时出错: {e}")
     
     # ==================== 任务管理 ====================
     
     def create_task(self, task: UploadTask) -> bool:
         """创建任务"""
         try:
-            # 转换为数据库模型
             task_model = UploadTaskModel(
                 id=task.id,
                 filename=task.filename,
@@ -42,8 +61,10 @@ class DatabaseService:
                 file_type=task.file_type,
                 status=task.status.value,
                 progress=task.progress,
-                result=task.result.json() if task.result else None,
+                result=task.result.model_dump_json() if task.result else None,
                 error=task.error,
+                original_markdown=task.original_markdown,
+                processed_data=task.processed_data,
                 created_at=task.created_at,
                 updated_at=task.updated_at,
                 completed_at=task.completed_at
@@ -77,13 +98,29 @@ class DatabaseService:
     
     def update_task_status(self, task_id: str, status: TaskStatus, 
                           progress: int = None, result: ResumeInfo = None, 
-                          error: str = None) -> bool:
-        """更新任务状态"""
+                          error: str = None,
+                          original_markdown: str = None) -> bool:
+        """更新任务状态，支持同时存储 original_markdown 和 processed_data"""
         try:
-            result_json = result.json() if result else None
+            result_json = result.model_dump_json() if result else None
+            
+            # 构建 processed_data（包含 normalize 后的完整数据）
+            processed_json = None
+            if result:
+                normalized = result.normalize()
+                processed_json = normalized.model_dump_json()
+            
             success = self.upload_repo.update_status(
                 task_id, status, progress, result_json, error
             )
+            
+            # 存储 original_markdown 和 processed_data
+            if success and (original_markdown or processed_json):
+                self.upload_repo.update_markdown_and_data(
+                    task_id,
+                    original_markdown=original_markdown,
+                    processed_data=processed_json,
+                )
             
             # 如果任务完成且有结果，创建简历信息和候选人记录
             if success and status == TaskStatus.COMPLETED and result:
@@ -97,11 +134,8 @@ class DatabaseService:
     def delete_task(self, task_id: str) -> bool:
         """删除任务"""
         try:
-            # 删除相关记录
             self.resume_repo.delete_by_task_id(task_id)
             self.candidate_repo.delete_by_task_id(task_id)
-            
-            # 删除任务
             return self.upload_repo.delete(task_id)
         except Exception as e:
             print(f"删除任务失败: {e}")
@@ -192,10 +226,12 @@ class DatabaseService:
     def _convert_task_model_to_upload_task(self, task_model: UploadTaskModel) -> UploadTask:
         """将数据库模型转换为UploadTask对象"""
         result = None
-        if task_model.result:
+        # 优先从 processed_data 恢复，其次从 result
+        json_str = task_model.processed_data or task_model.result
+        if json_str:
             try:
-                result_data = json.loads(task_model.result)
-                result = ResumeInfo(**result_data)
+                result_data = json.loads(json_str)
+                result = ResumeInfo.model_validate(result_data)
             except Exception as e:
                 print(f"解析结果数据失败: {e}")
         
@@ -209,6 +245,8 @@ class DatabaseService:
             progress=task_model.progress,
             result=result,
             error=task_model.error,
+            original_markdown=task_model.original_markdown,
+            processed_data=task_model.processed_data,
             created_at=task_model.created_at,
             updated_at=task_model.updated_at,
             completed_at=task_model.completed_at
@@ -230,13 +268,13 @@ class DatabaseService:
                 data["address"] = resume_info.contact.address
         
         if resume_info.education:
-            data["education"] = json.dumps([edu.dict() for edu in resume_info.education], ensure_ascii=False)
+            data["education"] = json.dumps([edu.model_dump() for edu in resume_info.education], ensure_ascii=False)
         
         if resume_info.experience:
-            data["experience"] = json.dumps([exp.dict() for exp in resume_info.experience], ensure_ascii=False)
+            data["experience"] = json.dumps([exp.model_dump() for exp in resume_info.experience], ensure_ascii=False)
         
         if resume_info.projects:
-            data["projects"] = json.dumps([proj.dict() for proj in resume_info.projects], ensure_ascii=False)
+            data["projects"] = json.dumps([proj.model_dump() for proj in resume_info.projects], ensure_ascii=False)
         
         if resume_info.skills:
             data["skills"] = json.dumps(resume_info.skills, ensure_ascii=False)
@@ -258,15 +296,11 @@ class DatabaseService:
     def _create_resume_and_candidate_records(self, task_id: str, resume_info: ResumeInfo):
         """创建简历信息和候选人记录"""
         try:
-            # 创建简历信息记录
             self.create_resume_info(task_id, resume_info)
-            
-            # 创建候选人记录
             self.create_candidate(task_id, resume_info)
-            
-            print(f"✅ 为任务 {task_id} 创建了简历信息和候选人记录")
+            print(f"为任务 {task_id} 创建了简历信息和候选人记录")
         except Exception as e:
-            print(f"❌ 创建简历信息和候选人记录失败: {e}")
+            print(f"创建简历信息和候选人记录失败: {e}")
 
 # 创建全局数据库服务实例
 db_service = DatabaseService()

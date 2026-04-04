@@ -5,7 +5,7 @@ import jwt
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from app.core.config import Settings
+from app.core.config import settings
 from app.services.user_service import UserService
 
 class AuthService:
@@ -13,10 +13,10 @@ class AuthService:
     
     def __init__(self):
         self.user_service = UserService()
-        self.secret_key = Settings.SECRET_KEY if hasattr(Settings, 'SECRET_KEY') else "your-secret-key-here"
+        self.secret_key = settings.SECRET_KEY
         self.algorithm = "HS256"
-        self.access_token_expire_minutes = 30
-        self.refresh_token_expire_days = 7
+        self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        self.refresh_token_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
     
     def create_access_token(self, user_id: int, username: str, role: str) -> str:
         """创建访问令牌"""
