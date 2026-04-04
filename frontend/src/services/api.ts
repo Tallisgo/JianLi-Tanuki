@@ -4,23 +4,24 @@
 
 // API配置函数
 const getApiBaseUrl = (): string => {
-    // 检查是否在浏览器环境中
     if (typeof window === 'undefined') {
         return 'http://localhost:8001/api/v1';
     }
 
-    // 检查是否为生产环境或部署环境
-    const isProduction = process.env.NODE_ENV === 'production' ||
-        (window.location.hostname !== 'localhost' &&
-            window.location.hostname !== '127.0.0.1');
+    const hostname = window.location.hostname;
+    const isLocalDev =
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.') ||
+        hostname.startsWith('172.');
 
-    if (isProduction) {
-        // 生产环境：使用当前访问的域名，不包含端口号（通过Nginx代理）
-        return `${window.location.protocol}//${window.location.hostname}/api/v1`;
-    } else {
-        // 开发环境：使用localhost
-        return 'http://localhost:8001/api/v1';
+    if (isLocalDev) {
+        return `http://${hostname}:8001/api/v1`;
     }
+
+    // 生产环境：通过 Nginx 代理，不带端口
+    return `${window.location.protocol}//${hostname}/api/v1`;
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -157,19 +158,30 @@ export interface RegisterRequest {
 }
 
 class ApiService {
-    /**
-     * 获取所有任务（候选人）
-     */
+
+    private getAuthHeaders(): Record<string, string> {
+        const token = this.getAccessToken();
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+    }
+
+    private async authFetch(url: string, init?: RequestInit): Promise<Response> {
+        const headers = { ...this.getAuthHeaders(), ...(init?.headers || {}) };
+        return fetch(url, { ...init, headers });
+    }
+
     async getCandidates(): Promise<Candidate[]> {
         try {
-            const response = await fetch(`${API_BASE_URL}/tasks/`);
+            const response = await this.authFetch(`${API_BASE_URL}/tasks/`);
             if (!response.ok) {
                 throw new Error('获取候选人列表失败');
             }
 
             const tasks: TaskResponse[] = await response.json();
 
-            // 将任务转换为候选人格式
             return tasks
                 .filter(task => task.status === 'completed' && task.result)
                 .map(task => this.convertTaskToCandidate(task));
@@ -179,12 +191,9 @@ class ApiService {
         }
     }
 
-    /**
-     * 获取候选人详情
-     */
     async getCandidate(id: string): Promise<Candidate | null> {
         try {
-            const response = await fetch(`${API_BASE_URL}/tasks/${id}`);
+            const response = await this.authFetch(`${API_BASE_URL}/tasks/${id}`);
             if (!response.ok) {
                 throw new Error('获取候选人详情失败');
             }
@@ -257,11 +266,10 @@ class ApiService {
      */
     async getDailyInspiration(): Promise<InspirationResponse | null> {
         try {
-            const response = await fetch(getInspirationUrl());
+            const response = await this.authFetch(getInspirationUrl());
             if (!response.ok) {
                 throw new Error('获取激励语失败');
             }
-
             return await response.json();
         } catch (error) {
             console.error('获取激励语失败:', error);
@@ -269,28 +277,31 @@ class ApiService {
         }
     }
 
-    /**
-     * 刷新今日激励语
-     */
     async refreshDailyInspiration(): Promise<InspirationResponse | null> {
         try {
-            console.log('API调用: 刷新激励语');
-            const response = await fetch(getRefreshInspirationUrl());
-            console.log('API响应状态:', response.status);
-
+            const response = await this.authFetch(getRefreshInspirationUrl());
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('API错误响应:', errorText);
                 throw new Error(`刷新激励语失败: ${response.status} ${errorText}`);
             }
-
-            const data = await response.json();
-            console.log('API响应数据:', data);
-            return data;
+            return await response.json();
         } catch (error) {
             console.error('刷新激励语失败:', error);
-            throw error; // 重新抛出错误，让组件处理
+            throw error;
         }
+    }
+
+    async getTaskStatistics(): Promise<{
+        total: number;
+        completed: number;
+        failed: number;
+        processing: number;
+        success_rate: number;
+        this_month: number;
+    }> {
+        const response = await this.authFetch(`${API_BASE_URL}/tasks/statistics`);
+        if (!response.ok) throw new Error('获取统计失败');
+        return response.json();
     }
 
     // ==================== 用户认证相关方法 ====================
@@ -650,7 +661,7 @@ class ApiService {
      */
     async downloadResume(taskId: string): Promise<void> {
         try {
-            const response = await fetch(`${API_BASE_URL}/upload/download/${taskId}`);
+            const response = await this.authFetch(`${API_BASE_URL}/upload/download/${taskId}`);
             if (!response.ok) {
                 throw new Error('下载简历失败');
             }
@@ -720,7 +731,7 @@ class ApiService {
             if (phone) params.append('phone', phone);
             if (email) params.append('email', email);
 
-            const response = await fetch(`${API_BASE_URL}/upload/check-duplicate?${params}`);
+            const response = await this.authFetch(`${API_BASE_URL}/upload/check-duplicate?${params}`);
             if (!response.ok) {
                 throw new Error('检查候选人失败');
             }
@@ -741,7 +752,7 @@ class ApiService {
                 ? `${API_BASE_URL}/upload/?force_update=true`
                 : `${API_BASE_URL}/upload/`;
 
-            const response = await fetch(url, {
+            const response = await this.authFetch(url, {
                 method: 'POST',
                 body: formData,
             });
@@ -758,12 +769,9 @@ class ApiService {
         }
     }
 
-    /**
-     * 更新已存在候选人的简历
-     */
     async updateCandidateResume(candidateId: number, formData: FormData): Promise<UploadResponse> {
         try {
-            const response = await fetch(`${API_BASE_URL}/upload/update/${candidateId}`, {
+            const response = await this.authFetch(`${API_BASE_URL}/upload/update/${candidateId}`, {
                 method: 'PUT',
                 body: formData,
             });
@@ -785,7 +793,7 @@ class ApiService {
      */
     async getTaskStatus(taskId: string): Promise<TaskResponse | null> {
         try {
-            const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`);
+            const response = await this.authFetch(`${API_BASE_URL}/tasks/${taskId}`);
             if (!response.ok) {
                 return null;
             }
@@ -814,9 +822,22 @@ class ApiService {
     /**
      * 删除候选人
      */
+    async updateCandidate(candidateId: string, updates: Record<string, any>): Promise<any> {
+        const response = await this.authFetch(`${API_BASE_URL}/candidates/${candidateId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates),
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || '更新候选人失败');
+        }
+        return response.json();
+    }
+
     async deleteCandidate(candidateId: string): Promise<void> {
         try {
-            const response = await fetch(`${API_BASE_URL}/tasks/${candidateId}`, {
+            const response = await this.authFetch(`${API_BASE_URL}/tasks/${candidateId}`, {
                 method: 'DELETE',
             });
 

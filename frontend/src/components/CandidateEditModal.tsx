@@ -11,6 +11,7 @@ import {
     message
 } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { apiService } from '../services/api';
 import type { Candidate } from '../services/api';
 
 const { Option } = Select;
@@ -56,15 +57,17 @@ const CandidateEditModal: React.FC<CandidateEditModalProps> = ({
             setLoading(true);
             const values = await form.validateFields();
 
+            await apiService.updateCandidate(candidate!.id, values);
+
             const updatedCandidate: Candidate = {
                 ...candidate!,
                 ...values
             };
 
             onSave(updatedCandidate);
-            message.success('候选人信息更新成功');
-        } catch (error) {
-            console.error('保存失败:', error);
+            message.success('候选人信息已保存');
+        } catch (error: any) {
+            message.error(error.message || '保存失败');
         } finally {
             setLoading(false);
         }
