@@ -254,7 +254,7 @@ class ApiService {
             })) || [],
             status: '已解析',
             uploadTime: new Date(task.created_at).toLocaleString('zh-CN'),
-            notes: result.summary || '',
+            notes: result.other || result.summary || '',
             result: result
         };
     }
@@ -848,6 +848,28 @@ class ApiService {
             console.error('删除候选人失败:', error);
             throw error;
         }
+    }
+
+    async importCandidatesFromExcel(file: File): Promise<{
+        message: string;
+        success: number;
+        skipped: number;
+        errors: string[];
+    }> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await this.authFetch(`${API_BASE_URL}/candidates/import-excel`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || '导入失败');
+        }
+
+        return response.json();
     }
 }
 
