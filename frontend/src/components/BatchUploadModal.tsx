@@ -45,6 +45,7 @@ interface BatchUploadModalProps {
     visible: boolean;
     onClose: () => void;
     onSuccess?: () => void;
+    defaultCategory?: string;
 }
 
 type FileStatus = 'pending' | 'uploading' | 'success' | 'error' | 'duplicate' | 'skipped';
@@ -81,7 +82,8 @@ interface UploadHistory {
 const BatchUploadModal: React.FC<BatchUploadModalProps> = ({
     visible,
     onClose,
-    onSuccess
+    onSuccess,
+    defaultCategory
 }) => {
     // 文件列表状态
     const [fileList, setFileList] = useState<UploadFileItem[]>([]);
@@ -133,6 +135,19 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({
         }
         return defaultCategories;
     };
+
+    // 弹窗打开时根据当前分类页自动预设全局分类
+    useEffect(() => {
+        if (visible && defaultCategory) {
+            const categories = getPositionCategories();
+            const matched = categories.find(
+                (cat: any) => (cat.key || cat.id) === defaultCategory
+            );
+            if (matched) {
+                setGlobalCategory(matched.name);
+            }
+        }
+    }, [visible, defaultCategory]);
 
     // 加载上传历史
     useEffect(() => {
