@@ -127,7 +127,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const updateProfile = async (profileData: Partial<User>): Promise<void> => {
         try {
             setIsLoading(true);
-            const updatedUser = await apiService.updateProfile(profileData);
+            if (!user?.id) throw new Error('用户未登录');
+            const updatedUser = await apiService.updateProfile(user.id, profileData);
             setUser(updatedUser);
         } catch (error) {
             console.error('更新资料失败:', error);

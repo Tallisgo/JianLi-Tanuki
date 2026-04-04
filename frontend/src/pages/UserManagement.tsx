@@ -28,6 +28,7 @@ import {
     ReloadOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
+import { apiService } from '../services/api';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -82,37 +83,8 @@ const UserManagement: React.FC = () => {
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            // 这里应该调用实际的API
-            // const response = await apiService.getUsers();
-            // setUsers(response.users);
-
-            // 模拟数据
-            const mockUsers: User[] = [
-                {
-                    id: 1,
-                    username: 'admin',
-                    email: 'admin@jianli-tanuki.com',
-                    full_name: '系统管理员',
-                    role: 'admin',
-                    status: 'active',
-                    login_count: 15,
-                    created_at: '2024-01-01T00:00:00Z',
-                    last_login: '2024-01-15T10:30:00Z'
-                },
-                {
-                    id: 2,
-                    username: 'user1',
-                    email: 'user1@example.com',
-                    full_name: '张三',
-                    phone: '13800138000',
-                    role: 'user',
-                    status: 'active',
-                    login_count: 5,
-                    created_at: '2024-01-10T00:00:00Z',
-                    last_login: '2024-01-14T15:20:00Z'
-                }
-            ];
-            setUsers(mockUsers);
+            const data = await apiService.getUsers();
+            setUsers(data as unknown as User[]);
         } catch (error) {
             message.error('获取用户列表失败');
         } finally {
@@ -122,21 +94,18 @@ const UserManagement: React.FC = () => {
 
     const fetchStats = async () => {
         try {
-            // 这里应该调用实际的API
-            // const response = await apiService.getUserStats();
-            // setStats(response.statistics);
-
-            // 模拟数据
-            const mockStats: UserStats = {
-                total_users: 2,
-                admin_users: 1,
-                regular_users: 1,
+            const allUsers = await apiService.getUsers() as unknown as User[];
+            const adminCount = allUsers.filter(u => u.role === 'admin').length;
+            const total = allUsers.length;
+            setStats({
+                total_users: total,
+                admin_users: adminCount,
+                regular_users: total - adminCount,
                 user_ratio: {
-                    admin: 50,
-                    regular: 50
+                    admin: total > 0 ? Math.round(adminCount / total * 100) : 0,
+                    regular: total > 0 ? Math.round((total - adminCount) / total * 100) : 0
                 }
-            };
-            setStats(mockStats);
+            });
         } catch (error) {
             message.error('获取统计信息失败');
         }
@@ -148,26 +117,28 @@ const UserManagement: React.FC = () => {
         setModalVisible(true);
     };
 
-    const handleDeleteUser = async (_userId: number) => {
+    const handleDeleteUser = async (userId: number) => {
         try {
-            // 这里应该调用实际的API
-            // await apiService.deleteUser(userId);
+            await apiService.deleteUser(String(userId));
             message.success('用户删除成功');
             fetchUsers();
+            fetchStats();
         } catch (error) {
             message.error('删除用户失败');
         }
     };
 
-    const handleUpdateUser = async (_values: any) => {
+    const handleUpdateUser = async (values: any) => {
         try {
-            // 这里应该调用实际的API
-            // await apiService.updateUser(editingUser!.id, values);
-            message.success('用户更新成功');
+            if (editingUser) {
+                await apiService.updateUser(String(editingUser.id), values);
+                message.success('用户更新成功');
+            }
             setModalVisible(false);
             setEditingUser(null);
             form.resetFields();
             fetchUsers();
+            fetchStats();
         } catch (error) {
             message.error('更新用户失败');
         }

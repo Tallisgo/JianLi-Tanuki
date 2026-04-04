@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, Typography, Space, Alert, Divider } from 'antd';
-import { QuestionCircleOutlined, UserOutlined, LockOutlined } from '@ant-design/icons';
+import { Card, Typography, Space } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -16,42 +16,6 @@ const Help: React.FC = () => {
             </div>
 
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                {/* 默认账户信息 */}
-                <Card title="默认管理员账户" size="small">
-                    <Alert
-                        message="系统默认管理员账户"
-                        description={
-                            <div>
-                                <Paragraph>
-                                    系统已预置管理员账户，用于首次登录和系统管理：
-                                </Paragraph>
-                                <Space direction="vertical" size="small">
-                                    <div>
-                                        <UserOutlined style={{ marginRight: '8px' }} />
-                                        <Text strong>用户名：</Text>
-                                        <Text code>admin</Text>
-                                    </div>
-                                    <div>
-                                        <LockOutlined style={{ marginRight: '8px' }} />
-                                        <Text strong>密码：</Text>
-                                        <Text code>admin123</Text>
-                                    </div>
-                                    <div>
-                                        <Text strong>邮箱：</Text>
-                                        <Text code>admin@jianli-tanuki.com</Text>
-                                    </div>
-                                </Space>
-                                <Divider />
-                                <Text type="secondary" style={{ fontSize: '12px' }}>
-                                    ⚠️ 建议首次登录后立即修改默认密码，确保系统安全
-                                </Text>
-                            </div>
-                        }
-                        type="info"
-                        showIcon
-                    />
-                </Card>
-
                 {/* 功能说明 */}
                 <Card title="系统功能" size="small">
                     <Space direction="vertical" size="middle" style={{ width: '100%' }}>

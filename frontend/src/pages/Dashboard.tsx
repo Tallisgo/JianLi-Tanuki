@@ -25,27 +25,46 @@ import TodoList from '../components/TodoList';
 
 const { Title, Text } = Typography;
 
+interface DashboardStats {
+    total: number;
+    completed: number;
+    processing: number;
+    this_month: number;
+}
+
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
     const [candidates, setCandidates] = useState<Candidate[]>([]);
     const [loading, setLoading] = useState(false);
+    const [stats, setStats] = useState<DashboardStats>({ total: 0, completed: 0, processing: 0, this_month: 0 });
 
-    // 加载候选人数据
-    const loadCandidates = async () => {
+    const loadData = async () => {
         setLoading(true);
         try {
-            const data = await apiService.getCandidates();
+            const [data, statsData] = await Promise.all([
+                apiService.getCandidates(),
+                apiService.getTaskStatistics().catch(() => null),
+            ]);
             setCandidates(data);
+            if (statsData) {
+                setStats({
+                    total: statsData.completed,
+                    completed: statsData.completed,
+                    processing: statsData.processing,
+                    this_month: statsData.this_month,
+                });
+            } else {
+                setStats({ total: data.length, completed: data.length, processing: 0, this_month: 0 });
+            }
         } catch (error) {
-            console.error('加载候选人数据失败:', error);
+            console.error('加载数据失败:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    // 组件挂载时加载数据
     useEffect(() => {
-        loadCandidates();
+        loadData();
     }, []);
 
     // 获取最近候选人（最多6个）
@@ -147,7 +166,7 @@ const Dashboard: React.FC = () => {
                                 <Card size="small" style={{ height: '90px' }}>
                                     <Statistic
                                         title="候选人总数"
-                                        value={candidates.length}
+                                        value={stats.total}
                                         prefix={<UserOutlined style={{ fontSize: '18px' }} />}
                                         valueStyle={{ color: '#3f8600', fontSize: '24px' }}
                                     />
@@ -157,7 +176,7 @@ const Dashboard: React.FC = () => {
                                 <Card size="small" style={{ height: '90px' }}>
                                     <Statistic
                                         title="本月新增"
-                                        value={candidates.length}
+                                        value={stats.this_month}
                                         prefix={<FileTextOutlined style={{ fontSize: '18px' }} />}
                                         valueStyle={{ color: '#1890ff', fontSize: '24px' }}
                                     />
@@ -166,8 +185,8 @@ const Dashboard: React.FC = () => {
                             <Col span={6}>
                                 <Card size="small" style={{ height: '90px' }}>
                                     <Statistic
-                                        title="待处理"
-                                        value={0}
+                                        title="解析中"
+                                        value={stats.processing}
                                         prefix={<ClockCircleOutlined style={{ fontSize: '18px' }} />}
                                         valueStyle={{ color: '#faad14', fontSize: '24px' }}
                                     />
@@ -177,7 +196,7 @@ const Dashboard: React.FC = () => {
                                 <Card size="small" style={{ height: '90px' }}>
                                     <Statistic
                                         title="已解析"
-                                        value={candidates.length}
+                                        value={stats.completed}
                                         prefix={<CheckCircleOutlined style={{ fontSize: '18px' }} />}
                                         valueStyle={{ color: '#52c41a', fontSize: '24px' }}
                                     />
