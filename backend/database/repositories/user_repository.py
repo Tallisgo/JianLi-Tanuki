@@ -5,6 +5,9 @@ from typing import List, Optional, Dict, Any
 from database.repositories.base_repository import BaseRepository
 from database.models.user import UserModel
 from database.config.connection import db_connection
+import logging
+
+logger = logging.getLogger(__name__)
 
 class UserRepository(BaseRepository[UserModel]):
     """用户数据访问层"""
@@ -34,7 +37,7 @@ class UserRepository(BaseRepository[UserModel]):
             user.id = user_id
             return user
         except Exception as e:
-            print(f"创建用户失败: {e}")
+            logger.error(f"创建用户失败: {e}")
             return None
     
     def get_by_id(self, user_id: int) -> Optional[UserModel]:
@@ -46,7 +49,7 @@ class UserRepository(BaseRepository[UserModel]):
                 return UserModel.from_row(dict(rows[0]))
             return None
         except Exception as e:
-            print(f"获取用户失败: {e}")
+            logger.error(f"获取用户失败: {e}")
             return None
     
     def get_by_username(self, username: str) -> Optional[UserModel]:
@@ -58,7 +61,7 @@ class UserRepository(BaseRepository[UserModel]):
                 return UserModel.from_row(dict(rows[0]))
             return None
         except Exception as e:
-            print(f"根据用户名获取用户失败: {e}")
+            logger.error(f"根据用户名获取用户失败: {e}")
             return None
     
     def get_by_email(self, email: str) -> Optional[UserModel]:
@@ -70,7 +73,7 @@ class UserRepository(BaseRepository[UserModel]):
                 return UserModel.from_row(dict(rows[0]))
             return None
         except Exception as e:
-            print(f"根据邮箱获取用户失败: {e}")
+            logger.error(f"根据邮箱获取用户失败: {e}")
             return None
     
     def get_all(self, limit: int = 100, offset: int = 0) -> List[UserModel]:
@@ -89,7 +92,7 @@ class UserRepository(BaseRepository[UserModel]):
             
             return users
         except Exception as e:
-            print(f"获取用户列表失败: {e}")
+            logger.error(f"获取用户列表失败: {e}")
             return []
     
     def update(self, user: UserModel) -> bool:
@@ -110,7 +113,7 @@ class UserRepository(BaseRepository[UserModel]):
             
             return affected_rows > 0
         except Exception as e:
-            print(f"更新用户失败: {e}")
+            logger.error(f"更新用户失败: {e}")
             return False
     
     def delete(self, user_id: int) -> bool:
@@ -119,7 +122,7 @@ class UserRepository(BaseRepository[UserModel]):
             affected_rows = db_connection.execute_update(f"DELETE FROM {self.table_name} WHERE id = ?", (user_id,))
             return affected_rows > 0
         except Exception as e:
-            print(f"删除用户失败: {e}")
+            logger.error(f"删除用户失败: {e}")
             return False
     
     def search(self, query: str, limit: int = 100, offset: int = 0) -> List[UserModel]:
@@ -140,7 +143,7 @@ class UserRepository(BaseRepository[UserModel]):
             
             return users
         except Exception as e:
-            print(f"搜索用户失败: {e}")
+            logger.error(f"搜索用户失败: {e}")
             return []
     
     def get_by_role(self, role: str, limit: int = 100, offset: int = 0) -> List[UserModel]:
@@ -160,7 +163,7 @@ class UserRepository(BaseRepository[UserModel]):
             
             return users
         except Exception as e:
-            print(f"根据角色获取用户失败: {e}")
+            logger.error(f"根据角色获取用户失败: {e}")
             return []
     
     def get_active_users(self, limit: int = 100, offset: int = 0) -> List[UserModel]:
@@ -180,7 +183,7 @@ class UserRepository(BaseRepository[UserModel]):
             
             return users
         except Exception as e:
-            print(f"获取活跃用户失败: {e}")
+            logger.error(f"获取活跃用户失败: {e}")
             return []
     
     def count(self) -> int:
@@ -189,7 +192,7 @@ class UserRepository(BaseRepository[UserModel]):
             rows = db_connection.execute_query(f"SELECT COUNT(*) as count FROM {self.table_name}")
             return rows[0]['count'] if rows else 0
         except Exception as e:
-            print(f"获取用户总数失败: {e}")
+            logger.error(f"获取用户总数失败: {e}")
             return 0
     
     def count_by_role(self, role: str) -> int:
@@ -198,5 +201,5 @@ class UserRepository(BaseRepository[UserModel]):
             rows = db_connection.execute_query(f"SELECT COUNT(*) as count FROM {self.table_name} WHERE role = ?", (role,))
             return rows[0]['count'] if rows else 0
         except Exception as e:
-            print(f"根据角色获取用户数量失败: {e}")
+            logger.error(f"根据角色获取用户数量失败: {e}")
             return 0

@@ -1,6 +1,7 @@
 """
 激励语API端点
 """
+import logging
 from fastapi import APIRouter, HTTPException
 from datetime import datetime, date
 from typing import Optional
@@ -8,6 +9,8 @@ import random
 import json
 import requests
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -126,7 +129,7 @@ async def generate_inspiration_with_llm() -> str:
         return llm_text
         
     except Exception as e:
-        print(f"LLM生成激励语失败: {e}")
+        logger.error(f"LLM生成激励语失败: {e}")
         # 如果LLM调用失败，使用模板库
         return random.choice(INSPIRATION_TEMPLATES)
 

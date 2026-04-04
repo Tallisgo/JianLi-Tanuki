@@ -25,18 +25,28 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
 
     # CORS配置 - 存为原始字符串，通过 property 返回列表
-    # pydantic-settings 对 List 类型会尝试 json.loads，逗号分隔字符串会失败
     BACKEND_CORS_ORIGINS: str = "*"
 
     @property
     def cors_origins(self) -> List[str]:
         return [o.strip() for o in self.BACKEND_CORS_ORIGINS.split(",") if o.strip()]
 
-    # 数据库配置
-    DATABASE_URL: str = "sqlite:///./data/resume_parser.db"
+    # ==========================================================
+    # 统一数据目录 - Docker 部署时只需挂载此目录
+    # 目录结构: DATA_DIR/db/  DATA_DIR/uploads/  DATA_DIR/logs/
+    # ==========================================================
+    DATA_DIR: str = "./data"
 
-    # 文件上传配置
-    UPLOAD_DIR: str = "uploads"
+    # 数据库配置（默认基于 DATA_DIR）
+    DATABASE_URL: str = "sqlite:///./data/db/resume_parser.db"
+
+    # 文件上传目录（默认基于 DATA_DIR）
+    UPLOAD_DIR: str = "./data/uploads"
+
+    # 日志目录（默认基于 DATA_DIR）
+    LOG_DIR: str = "./data/logs"
+
+    # 文件上传限制
     MAX_FILE_SIZE: int = 10485760  # 10MB
     ALLOWED_FILE_TYPES: str = (
         "application/pdf,application/msword,"
@@ -71,9 +81,8 @@ class Settings(BaseSettings):
 
     # 日志配置
     LOG_LEVEL: str = "INFO"
-    LOG_FILE: str = "logs/jianli-tanuki.log"
-    LOG_MAX_SIZE: int = 10  # MB
-    LOG_BACKUP_COUNT: int = 5
+    LOG_FILE: str = "jianli-tanuki.log"
+    LOG_BACKUP_COUNT: int = 30  # 按日轮转保留天数
 
     # 缓存配置
     CACHE_SIZE: int = 100  # MB

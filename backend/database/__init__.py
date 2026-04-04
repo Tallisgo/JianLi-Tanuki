@@ -10,6 +10,9 @@ from .repositories import (
     CandidateRepository,
     UserRepository
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 创建全局实例
 migration_manager = MigrationManager()
@@ -20,20 +23,20 @@ user_repo = UserRepository()
 
 def init_database():
     """初始化数据库"""
-    print("🔄 初始化数据库...")
+    logger.info("初始化数据库...")
     
     # 检查数据库连接
     if not db_connection.check_connection():
-        print("❌ 数据库连接失败")
+        logger.error("数据库连接失败")
         return False
     
     # 运行迁移
     try:
         migration_manager.run_all_migrations()
-        print("✅ 数据库初始化完成")
+        logger.info("数据库初始化完成")
         return True
     except Exception as e:
-        print(f"❌ 数据库初始化失败: {e}")
+        logger.error(f"数据库初始化失败: {e}")
         return False
 
 def get_database_info():

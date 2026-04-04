@@ -3,8 +3,11 @@
 集成新的数据库架构到现有服务中
 """
 import json
+import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from database import (
     upload_task_repo, 
     resume_info_repo, 
@@ -44,9 +47,9 @@ class DatabaseService:
                 user_service = UserService()
                 admin.password_hash = user_service.hash_password("admin123")
                 user_repo.update(admin)
-                print("已自动修正 admin 用户的密码哈希格式")
+                logger.info("已自动修正 admin 用户的密码哈希格式")
         except Exception as e:
-            print(f"检查 admin 密码格式时出错: {e}")
+            logger.error(f"检查 admin 密码格式时出错: {e}")
     
     # ==================== 任务管理 ====================
     
@@ -72,7 +75,7 @@ class DatabaseService:
             
             return self.upload_repo.create(task_model)
         except Exception as e:
-            print(f"创建任务失败: {e}")
+            logger.error(f"创建任务失败: {e}")
             return False
     
     def get_task(self, task_id: str) -> Optional[UploadTask]:
@@ -84,7 +87,7 @@ class DatabaseService:
             
             return self._convert_task_model_to_upload_task(task_model)
         except Exception as e:
-            print(f"获取任务失败: {e}")
+            logger.error(f"获取任务失败: {e}")
             return None
     
     def get_all_tasks(self, limit: int = 100, offset: int = 0) -> List[UploadTask]:
@@ -93,7 +96,7 @@ class DatabaseService:
             task_models = self.upload_repo.get_all(limit, offset)
             return [self._convert_task_model_to_upload_task(model) for model in task_models]
         except Exception as e:
-            print(f"获取任务列表失败: {e}")
+            logger.error(f"获取任务列表失败: {e}")
             return []
     
     def update_task_status(self, task_id: str, status: TaskStatus, 
@@ -128,7 +131,7 @@ class DatabaseService:
             
             return success
         except Exception as e:
-            print(f"更新任务状态失败: {e}")
+            logger.error(f"更新任务状态失败: {e}")
             return False
     
     def delete_task(self, task_id: str) -> bool:
@@ -138,7 +141,7 @@ class DatabaseService:
             self.candidate_repo.delete_by_task_id(task_id)
             return self.upload_repo.delete(task_id)
         except Exception as e:
-            print(f"删除任务失败: {e}")
+            logger.error(f"删除任务失败: {e}")
             return False
     
     def get_task_statistics(self) -> Dict[str, Any]:
@@ -153,7 +156,7 @@ class DatabaseService:
             resume_data = self._convert_resume_info_to_dict(resume_info)
             return self.resume_repo.create_or_update_from_resume_info(task_id, resume_data)
         except Exception as e:
-            print(f"创建简历信息失败: {e}")
+            logger.error(f"创建简历信息失败: {e}")
             return False
     
     def get_resume_info(self, task_id: str) -> Optional[ResumeInfoModel]:
@@ -181,7 +184,7 @@ class DatabaseService:
             resume_data = self._convert_resume_info_to_dict(resume_info)
             return self.candidate_repo.create_from_resume_info(task_id, resume_data)
         except Exception as e:
-            print(f"创建候选人失败: {e}")
+            logger.error(f"创建候选人失败: {e}")
             return False
     
     def get_candidate(self, candidate_id: int) -> Optional[CandidateModel]:
@@ -233,7 +236,7 @@ class DatabaseService:
                 result_data = json.loads(json_str)
                 result = ResumeInfo.model_validate(result_data)
             except Exception as e:
-                print(f"解析结果数据失败: {e}")
+                logger.error(f"解析结果数据失败: {e}")
         
         return UploadTask(
             id=task_model.id,
@@ -298,9 +301,9 @@ class DatabaseService:
         try:
             self.create_resume_info(task_id, resume_info)
             self.create_candidate(task_id, resume_info)
-            print(f"为任务 {task_id} 创建了简历信息和候选人记录")
+            logger.info(f"为任务 {task_id} 创建了简历信息和候选人记录")
         except Exception as e:
-            print(f"创建简历信息和候选人记录失败: {e}")
+            logger.error(f"创建简历信息和候选人记录失败: {e}")
 
 # 创建全局数据库服务实例
 db_service = DatabaseService()

@@ -1,6 +1,7 @@
 """
 文件上传API端点
 """
+import logging
 import os
 import uuid
 from urllib.parse import quote
@@ -12,6 +13,8 @@ from app.services.file_service import FileService
 from app.services.task_service import TaskService
 from app.services.resume_service import ResumeService
 from app.services.database_service import db_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -156,7 +159,7 @@ async def download_resume(task_id: str):
         
         # 尝试获取候选人姓名作为文件名
         candidate = db_service.get_candidate_by_task_id(task_id)
-        print(f"📥 下载请求 task_id={task_id}, 候选人={candidate.name if candidate else 'None'}")
+        logger.debug(f"下载请求 task_id={task_id}, 候选人={candidate.name if candidate else 'None'}")
         
         # 获取原始文件扩展名
         original_filename = task.filename or "resume"
@@ -166,11 +169,11 @@ async def download_resume(task_id: str):
         if candidate and candidate.name:
             # 使用候选人姓名
             download_filename = f"{candidate.name}_简历{file_extension}"
-            print(f"✅ 使用候选人姓名作为文件名: {download_filename}")
+            logger.info(f"使用候选人姓名作为文件名: {download_filename}")
         else:
             # 使用原始文件名
             download_filename = original_filename
-            print(f"⚠️ 未找到候选人，使用原始文件名: {download_filename}")
+            logger.warning(f"未找到候选人，使用原始文件名: {download_filename}")
         
         # 读取文件内容
         with open(task.file_path, 'rb') as f:
@@ -199,7 +202,7 @@ async def download_resume(task_id: str):
             f"filename*=UTF-8''{encoded_filename}"
         )
         
-        print(f"📤 文件下载响应: ascii={ascii_filename}, utf8={download_filename}")
+        logger.debug(f"文件下载响应: ascii={ascii_filename}, utf8={download_filename}")
         
         return response
         

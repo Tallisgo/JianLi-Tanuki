@@ -4,6 +4,9 @@
 import os
 from typing import List, Dict, Any
 from database.config.connection import db_connection
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MigrationManager:
     """数据库迁移管理器"""
@@ -41,7 +44,7 @@ class MigrationManager:
     
     def run_migration(self, version: str, name: str, sql_commands: List[str]):
         """运行迁移"""
-        print(f"执行迁移: {version} - {name}")
+        logger.info(f"执行迁移: {version} - {name}")
         
         try:
             # 开始事务
@@ -60,10 +63,10 @@ class MigrationManager:
                 )
                 
                 conn.commit()
-                print(f"✅ 迁移 {version} 执行成功")
+                logger.info(f"迁移 {version} 执行成功")
                 
         except Exception as e:
-            print(f"❌ 迁移 {version} 执行失败: {e}")
+            logger.error(f"迁移 {version} 执行失败: {e}")
             raise e
     
     def run_all_migrations(self):
@@ -84,10 +87,10 @@ class MigrationManager:
         migration_files.sort(key=lambda x: x[0])
         
         if not migration_files:
-            print("✅ 所有迁移已是最新版本")
+            logger.info("所有迁移已是最新版本")
             return
         
-        print(f"发现 {len(migration_files)} 个待执行迁移")
+        logger.info(f"发现 {len(migration_files)} 个待执行迁移")
         
         for version, filename in migration_files:
             try:
@@ -103,7 +106,7 @@ class MigrationManager:
                 self.run_migration(version, migration_name, sql_commands)
                 
             except Exception as e:
-                print(f"❌ 迁移 {version} 执行失败: {e}")
+                logger.error(f"迁移 {version} 执行失败: {e}")
                 break
     
     def get_migration_status(self) -> Dict[str, Any]:

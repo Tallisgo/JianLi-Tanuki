@@ -4,6 +4,9 @@
 from typing import List, Optional, Dict, Any
 from database.repositories.base_repository import BaseRepository
 from database.models.candidate import CandidateModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CandidateRepository(BaseRepository[CandidateModel]):
     """候选人数据访问层"""
@@ -25,7 +28,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             self.connection.execute_update(sql, model.to_tuple())
             return True
         except Exception as e:
-            print(f"创建候选人失败: {e}")
+            logger.error(f"创建候选人失败: {e}")
             return False
     
     def get_by_id(self, id: int) -> Optional[CandidateModel]:
@@ -37,7 +40,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
                 return CandidateModel.from_row(rows[0])
             return None
         except Exception as e:
-            print(f"获取候选人失败: {e}")
+            logger.error(f"获取候选人失败: {e}")
             return None
     
     def get_by_task_id(self, task_id: str) -> Optional[CandidateModel]:
@@ -49,7 +52,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
                 return CandidateModel.from_row(rows[0])
             return None
         except Exception as e:
-            print(f"根据任务ID获取候选人失败: {e}")
+            logger.error(f"根据任务ID获取候选人失败: {e}")
             return None
     
     def get_all(self, limit: int = 100, offset: int = 0) -> List[CandidateModel]:
@@ -63,7 +66,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             rows = self.connection.execute_query(sql, (limit, offset))
             return [CandidateModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"获取候选人列表失败: {e}")
+            logger.error(f"获取候选人列表失败: {e}")
             return []
     
     def update(self, model: CandidateModel) -> bool:
@@ -89,7 +92,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             affected_rows = self.connection.execute_update(sql, params)
             return affected_rows > 0
         except Exception as e:
-            print(f"更新候选人失败: {e}")
+            logger.error(f"更新候选人失败: {e}")
             return False
     
     def delete(self, id: int) -> bool:
@@ -99,7 +102,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             affected_rows = self.connection.execute_update(sql, (id,))
             return affected_rows > 0
         except Exception as e:
-            print(f"删除候选人失败: {e}")
+            logger.error(f"删除候选人失败: {e}")
             return False
     
     def delete_by_task_id(self, task_id: str) -> bool:
@@ -109,7 +112,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             affected_rows = self.connection.execute_update(sql, (task_id,))
             return affected_rows > 0
         except Exception as e:
-            print(f"根据任务ID删除候选人失败: {e}")
+            logger.error(f"根据任务ID删除候选人失败: {e}")
             return False
     
     def count(self) -> int:
@@ -119,7 +122,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             rows = self.connection.execute_query(sql)
             return rows[0]["count"] if rows else 0
         except Exception as e:
-            print(f"获取候选人总数失败: {e}")
+            logger.error(f"获取候选人总数失败: {e}")
             return 0
     
     def search(self, filters: Dict[str, Any], limit: int = 100, offset: int = 0) -> List[CandidateModel]:
@@ -183,7 +186,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             rows = self.connection.execute_query(sql, tuple(params))
             return [CandidateModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"搜索候选人失败: {e}")
+            logger.error(f"搜索候选人失败: {e}")
             return []
     
     def get_by_name(self, name: str, limit: int = 100, offset: int = 0) -> List[CandidateModel]:
@@ -197,7 +200,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             rows = self.connection.execute_query(sql, (name,))
             return [CandidateModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"根据精确姓名查找候选人失败: {e}")
+            logger.error(f"根据精确姓名查找候选人失败: {e}")
             return []
     
     def find_duplicates(self, name: str, phone: str = None, email: str = None) -> List[CandidateModel]:
@@ -232,7 +235,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             rows = self.connection.execute_query(sql, tuple(params))
             return [CandidateModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"查找重复候选人失败: {e}")
+            logger.error(f"查找重复候选人失败: {e}")
             return []
     
     def get_by_position(self, position: str, limit: int = 100, offset: int = 0) -> List[CandidateModel]:
@@ -284,7 +287,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             rows = self.connection.execute_query(sql, (limit,))
             return [CandidateModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"获取高评分候选人失败: {e}")
+            logger.error(f"获取高评分候选人失败: {e}")
             return []
     
     def get_recent_candidates(self, days: int = 7, limit: int = 100) -> List[CandidateModel]:
@@ -299,7 +302,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             rows = self.connection.execute_query(sql, (limit,))
             return [CandidateModel.from_row(row) for row in rows]
         except Exception as e:
-            print(f"获取最近候选人失败: {e}")
+            logger.error(f"获取最近候选人失败: {e}")
             return []
     
     def get_statistics(self) -> Dict[str, Any]:
@@ -328,7 +331,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             return {"total": 0, "active": 0, "inactive": 0, "avg_rating": 0, "avg_experience": 0}
             
         except Exception as e:
-            print(f"获取候选人统计失败: {e}")
+            logger.error(f"获取候选人统计失败: {e}")
             return {"total": 0, "active": 0, "inactive": 0, "avg_rating": 0, "avg_experience": 0}
     
     def get_skills_statistics(self) -> Dict[str, int]:
@@ -360,7 +363,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             return dict(sorted_skills[:20])  # 返回前20个热门技能
             
         except Exception as e:
-            print(f"获取技能统计失败: {e}")
+            logger.error(f"获取技能统计失败: {e}")
             return {}
     
     def create_from_resume_info(self, task_id: str, resume_info: Dict[str, Any]) -> bool:
@@ -412,5 +415,5 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             return self.create(candidate)
             
         except Exception as e:
-            print(f"从简历信息创建候选人失败: {e}")
+            logger.error(f"从简历信息创建候选人失败: {e}")
             return False

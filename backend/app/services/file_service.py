@@ -1,11 +1,14 @@
 """
 文件处理服务
 """
+import logging
 import os
 import shutil
 from typing import Optional
 from fastapi import UploadFile
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 class FileService:
     """文件处理服务类"""
@@ -56,7 +59,7 @@ class FileService:
                 return True
             return False
         except Exception as e:
-            print(f"删除文件失败: {e}")
+            logger.error(f"删除文件失败: {e}")
             return False
     
     def get_file_size(self, file_path: str) -> Optional[int]:
@@ -74,7 +77,7 @@ class FileService:
                 return os.path.getsize(file_path)
             return None
         except Exception as e:
-            print(f"获取文件大小失败: {e}")
+            logger.error(f"获取文件大小失败: {e}")
             return None
     
     def validate_file_type(self, content_type: str) -> bool:
