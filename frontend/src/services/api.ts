@@ -2,44 +2,23 @@
  * API服务
  */
 
-// API配置函数
-const getApiBaseUrl = (): string => {
-    if (typeof window === 'undefined') {
-        return 'http://localhost:8001/api/v1';
-    }
-
-    const hostname = window.location.hostname;
-    const isLocalDev =
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname.startsWith('192.168.') ||
-        hostname.startsWith('10.') ||
-        hostname.startsWith('172.');
-
-    if (isLocalDev) {
-        return `http://${hostname}:8001/api/v1`;
-    }
-
-    // 生产环境：通过 Nginx 代理，不带端口
-    return `${window.location.protocol}//${hostname}/api/v1`;
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// 始终使用相对路径，由 Vite proxy（开发）或 Nginx（生产）转发到后端
+const API_BASE_URL = '/api/v1';
 
 const getAuthUrls = () => ({
-    login: `${getApiBaseUrl()}/auth/login`,
-    register: `${getApiBaseUrl()}/auth/register`,
-    me: `${getApiBaseUrl()}/auth/me`,
-    refresh: `${getApiBaseUrl()}/auth/refresh`,
-    logout: `${getApiBaseUrl()}/auth/logout`,
+    login: `${API_BASE_URL}/auth/login`,
+    register: `${API_BASE_URL}/auth/register`,
+    me: `${API_BASE_URL}/auth/me`,
+    refresh: `${API_BASE_URL}/auth/refresh`,
+    logout: `${API_BASE_URL}/auth/logout`,
 });
 
 const getInspirationUrl = (): string => {
-    return `${getApiBaseUrl()}/inspiration/daily`;
+    return `${API_BASE_URL}/inspiration/daily`;
 };
 
 const getRefreshInspirationUrl = (): string => {
-    return `${getApiBaseUrl()}/inspiration/refresh`;
+    return `${API_BASE_URL}/inspiration/refresh`;
 };
 
 export interface Candidate {
