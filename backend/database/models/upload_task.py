@@ -21,6 +21,7 @@ class UploadTaskModel(BaseModel):
                  error: Optional[str] = None,
                  original_markdown: Optional[str] = None,
                  processed_data: Optional[str] = None,
+                 category: Optional[str] = None,
                  created_at: Optional[datetime] = None,
                  updated_at: Optional[datetime] = None,
                  completed_at: Optional[datetime] = None,
@@ -37,6 +38,7 @@ class UploadTaskModel(BaseModel):
         self.error = error
         self.original_markdown = original_markdown
         self.processed_data = processed_data
+        self.category = category
         self.created_at = created_at or datetime.now()
         self.updated_at = updated_at
         self.completed_at = completed_at
@@ -55,6 +57,7 @@ class UploadTaskModel(BaseModel):
             "error": self.error,
             "original_markdown": self.original_markdown,
             "processed_data": self.processed_data,
+            "category": self.category,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None
@@ -96,6 +99,7 @@ class UploadTaskModel(BaseModel):
             error=data.get("error"),
             original_markdown=data.get("original_markdown"),
             processed_data=data.get("processed_data"),
+            category=data.get("category"),
             created_at=created_at,
             updated_at=updated_at,
             completed_at=completed_at
@@ -115,6 +119,7 @@ class UploadTaskModel(BaseModel):
             self.error,
             self.original_markdown,
             self.processed_data,
+            self.category,
             self.created_at.isoformat(),
             self.updated_at.isoformat() if self.updated_at else None,
             self.completed_at.isoformat() if self.completed_at else None
@@ -126,12 +131,17 @@ class UploadTaskModel(BaseModel):
         # 兼容旧数据库（可能没有新列）
         original_markdown = None
         processed_data = None
+        category = None
         try:
             original_markdown = row["original_markdown"]
         except (IndexError, KeyError):
             pass
         try:
             processed_data = row["processed_data"]
+        except (IndexError, KeyError):
+            pass
+        try:
+            category = row["category"]
         except (IndexError, KeyError):
             pass
 
@@ -147,6 +157,7 @@ class UploadTaskModel(BaseModel):
             error=row["error"],
             original_markdown=original_markdown,
             processed_data=processed_data,
+            category=category,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
             updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
             completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None

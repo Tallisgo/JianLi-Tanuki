@@ -44,7 +44,7 @@ class ResumeService:
         
         return candidates[0] if len(candidates) == 1 else None
     
-    async def process_resume(self, task_id: str, force_update: bool = False):
+    async def process_resume(self, task_id: str, force_update: bool = False, category: str = None):
         """处理简历解析任务"""
         try:
             task = await self.task_service.get_task(task_id)
@@ -90,7 +90,8 @@ class ResumeService:
             # 完成任务，存储结果和原始 Markdown
             db_service.update_task_status(
                 task_id, TaskStatus.COMPLETED, progress=100,
-                result=result, original_markdown=original_markdown
+                result=result, original_markdown=original_markdown,
+                category=category
             )
             
             logger.info(f"任务解析完成: {task_id}, 候选人: {result.name}")

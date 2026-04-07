@@ -28,18 +28,19 @@ export interface Candidate {
     email?: string;
     address?: string;
     position?: string;
+    category?: string;
     experience?: string;
     education?: string;
     school?: string;
     major?: string;
-    educationList?: EducationInfo[]; // 添加教育背景列表
+    educationList?: EducationInfo[];
     skills?: string[];
     workExperience?: WorkExperience[];
     projects?: Project[];
     status: string;
     uploadTime: string;
     notes?: string;
-    result?: any; // 解析结果
+    result?: any;
 }
 
 export interface EducationInfo {
@@ -76,6 +77,7 @@ export interface TaskResponse {
     status: string;
     result?: any;
     error?: string;
+    category?: string;
     created_at: string;
     updated_at: string;
 }
@@ -154,12 +156,27 @@ class ApiService {
 
     async getCandidates(): Promise<Candidate[]> {
         try {
-            const response = await this.authFetch(`${API_BASE_URL}/tasks/`);
-            if (!response.ok) {
-                throw new Error('获取候选人列表失败');
-            }
+            const pageSize = 1000;
+            let offset = 0;
+            const tasks: TaskResponse[] = [];
 
-            const tasks: TaskResponse[] = await response.json();
+            // 分页拉取，避免被后端默认 limit=100 截断
+            while (true) {
+                const response = await this.authFetch(`${API_BASE_URL}/tasks/?limit=${pageSize}&offset=${offset}`);
+                if (!response.ok) {
+                    throw new Error('获取候选人列表失败');
+                }
+                const page: TaskResponse[] = await response.json();
+                tasks.push(...page);
+                if (page.length < pageSize) {
+                    break;
+                }
+                offset += pageSize;
+                if (offset >= 100000) {
+                    // 安全阈值，防止异常情况下无限循环
+                    break;
+                }
+            }
 
             return tasks
                 .filter(task => task.status === 'completed' && task.result)
@@ -234,7 +251,8 @@ class ApiService {
             status: '已解析',
             uploadTime: new Date(task.created_at).toLocaleString('zh-CN'),
             notes: result.other || result.summary || '',
-            result: result
+            result: result,
+            category: task.category || undefined
         };
     }
 
@@ -829,7 +847,7 @@ class ApiService {
         }
     }
 
-    async importCandidatesFromExcel(file: File): Promise<{
+    async importCandidatesFromExcel(file: File, category?: string): Promise<{
         message: string;
         success: number;
         skipped: number;
@@ -838,7 +856,12 @@ class ApiService {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await this.authFetch(`${API_BASE_URL}/candidates/import-excel`, {
+        let url = `${API_BASE_URL}/candidates/import-excel`;
+        if (category) {
+            url += `?category=${encodeURIComponent(category)}`;
+        }
+
+        const response = await this.authFetch(url, {
             method: 'POST',
             body: formData,
         });
@@ -846,6 +869,25 @@ class ApiService {
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
             throw new Error(err.detail || '导入失败');
+        }
+
+        return response.json();
+    }
+
+    async batchUpdateCategory(taskIds: string[], category: string): Promise<{
+        message: string;
+        success: number;
+        failed: number;
+    }> {
+        const response = await this.authFetch(`${API_BASE_URL}/candidates/batch-update-category`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_ids: taskIds, category }),
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || '批量更新分类失败');
         }
 
         return response.json();

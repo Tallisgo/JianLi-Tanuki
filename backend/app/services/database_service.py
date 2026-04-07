@@ -68,6 +68,7 @@ class DatabaseService:
                 error=task.error,
                 original_markdown=task.original_markdown,
                 processed_data=task.processed_data,
+                category=task.category,
                 created_at=task.created_at,
                 updated_at=task.updated_at,
                 completed_at=task.completed_at
@@ -99,24 +100,25 @@ class DatabaseService:
             logger.error(f"获取任务列表失败: {e}")
             return []
     
-    def update_task_status(self, task_id: str, status: TaskStatus, 
-                          progress: int = None, result: ResumeInfo = None, 
+    def update_task_status(self, task_id: str, status: TaskStatus,
+                          progress: int = None, result: ResumeInfo = None,
                           error: str = None,
-                          original_markdown: str = None) -> bool:
+                          original_markdown: str = None,
+                          category: str = None) -> bool:
         """更新任务状态，支持同时存储 original_markdown 和 processed_data"""
         try:
             result_json = result.model_dump_json() if result else None
-            
+
             # 构建 processed_data（包含 normalize 后的完整数据）
             processed_json = None
             if result:
                 normalized = result.normalize()
                 processed_json = normalized.model_dump_json()
-            
+
             success = self.upload_repo.update_status(
                 task_id, status, progress, result_json, error
             )
-            
+
             # 存储 original_markdown 和 processed_data
             if success and (original_markdown or processed_json):
                 self.upload_repo.update_markdown_and_data(
@@ -124,11 +126,18 @@ class DatabaseService:
                     original_markdown=original_markdown,
                     processed_data=processed_json,
                 )
-            
+
+            # 存储 category 到 upload_task
+            if success and category:
+                task_model = self.upload_repo.get_by_id(task_id)
+                if task_model:
+                    task_model.category = category
+                    self.upload_repo.update(task_model)
+
             # 如果任务完成且有结果，创建简历信息和候选人记录
             if success and status == TaskStatus.COMPLETED and result:
-                self._create_resume_and_candidate_records(task_id, result)
-            
+                self._create_resume_and_candidate_records(task_id, result, category=category)
+
             return success
         except Exception as e:
             logger.error(f"更新任务状态失败: {e}")
@@ -178,11 +187,11 @@ class DatabaseService:
     
     # ==================== 候选人管理 ====================
     
-    def create_candidate(self, task_id: str, resume_info: ResumeInfo) -> bool:
+    def create_candidate(self, task_id: str, resume_info: ResumeInfo, category: str = None) -> bool:
         """创建候选人记录"""
         try:
             resume_data = self._convert_resume_info_to_dict(resume_info)
-            return self.candidate_repo.create_from_resume_info(task_id, resume_data)
+            return self.candidate_repo.create_from_resume_info(task_id, resume_data, category=category)
         except Exception as e:
             logger.error(f"创建候选人失败: {e}")
             return False
@@ -250,6 +259,7 @@ class DatabaseService:
             error=task_model.error,
             original_markdown=task_model.original_markdown,
             processed_data=task_model.processed_data,
+            category=task_model.category,
             created_at=task_model.created_at,
             updated_at=task_model.updated_at,
             completed_at=task_model.completed_at
@@ -296,11 +306,11 @@ class DatabaseService:
         
         return data
     
-    def _create_resume_and_candidate_records(self, task_id: str, resume_info: ResumeInfo):
+    def _create_resume_and_candidate_records(self, task_id: str, resume_info: ResumeInfo, category: str = None):
         """创建简历信息和候选人记录"""
         try:
             self.create_resume_info(task_id, resume_info)
-            self.create_candidate(task_id, resume_info)
+            self.create_candidate(task_id, resume_info, category=category)
             logger.info(f"为任务 {task_id} 创建了简历信息和候选人记录")
         except Exception as e:
             logger.error(f"创建简历信息和候选人记录失败: {e}")

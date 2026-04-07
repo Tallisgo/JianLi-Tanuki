@@ -16,6 +16,7 @@ class CandidateModel(BaseModel):
                  email: Optional[str] = None,
                  address: Optional[str] = None,
                  position: Optional[str] = None,
+                 category: Optional[str] = None,
                  experience_years: Optional[int] = None,
                  education_level: Optional[str] = None,
                  school: Optional[str] = None,
@@ -39,6 +40,7 @@ class CandidateModel(BaseModel):
         self.email = email
         self.address = address
         self.position = position
+        self.category = category
         self.experience_years = experience_years
         self.education_level = education_level
         self.school = school
@@ -64,6 +66,7 @@ class CandidateModel(BaseModel):
             "email": self.email,
             "address": self.address,
             "position": self.position,
+            "category": self.category,
             "experience_years": self.experience_years,
             "education_level": self.education_level,
             "school": self.school,
@@ -106,6 +109,7 @@ class CandidateModel(BaseModel):
             email=data.get("email"),
             address=data.get("address"),
             position=data.get("position"),
+            category=data.get("category"),
             experience_years=data.get("experience_years"),
             education_level=data.get("education_level"),
             school=data.get("school"),
@@ -131,6 +135,7 @@ class CandidateModel(BaseModel):
             self.email,
             self.address,
             self.position,
+            self.category,
             self.experience_years,
             self.education_level,
             self.school,
@@ -150,6 +155,11 @@ class CandidateModel(BaseModel):
     @classmethod
     def from_row(cls, row) -> 'CandidateModel':
         """从数据库行创建实例"""
+        category = None
+        try:
+            category = row["category"]
+        except (IndexError, KeyError):
+            pass
         return cls(
             id=row["id"],
             task_id=row["task_id"],
@@ -158,6 +168,7 @@ class CandidateModel(BaseModel):
             email=row["email"],
             address=row["address"],
             position=row["position"],
+            category=category,
             experience_years=row["experience_years"],
             education_level=row["education_level"],
             school=row["school"],

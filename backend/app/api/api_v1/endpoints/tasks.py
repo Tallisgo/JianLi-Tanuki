@@ -58,6 +58,7 @@ async def get_all_tasks(
                 progress=task.progress,
                 result=task.result.model_dump() if task.result else None,
                 error=task.error,
+                category=task.category,
                 created_at=task.created_at.isoformat(),
                 updated_at=task.updated_at.isoformat() if task.updated_at else None,
                 completed_at=task.completed_at.isoformat() if task.completed_at else None
@@ -94,6 +95,7 @@ async def get_task(task_id: str):
             progress=task.progress,
             result=task.result.model_dump() if task.result else None,
             error=task.error,
+            category=task.category,
             created_at=task.created_at.isoformat(),
             updated_at=task.updated_at.isoformat() if task.updated_at else None,
             completed_at=task.completed_at.isoformat() if task.completed_at else None
