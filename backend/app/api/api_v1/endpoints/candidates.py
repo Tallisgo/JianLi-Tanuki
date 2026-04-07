@@ -37,6 +37,58 @@ async def get_all_candidates(
             detail=f"获取候选人列表失败: {str(e)}"
         )
 
+@router.put("/batch-update-category", summary="批量更新候选人分类")
+async def batch_update_category(payload: Dict[str, Any]):
+    """
+    批量更新候选人的职位分类
+
+    - **task_ids**: 候选人对应的任务ID列表
+    - **category**: 目标分类名称
+    """
+    task_ids = payload.get("task_ids", [])
+    new_category = payload.get("category", "")
+
+    if not task_ids or not new_category:
+        raise HTTPException(status_code=400, detail="task_ids 和 category 不能为空")
+
+    success_count = 0
+    fail_count = 0
+
+    for task_id in task_ids:
+        try:
+            updated = False
+
+            # 1) 更新候选人表（历史逻辑）
+            candidate = db_service.get_candidate_by_task_id(task_id)
+            if candidate:
+                candidate.category = new_category
+                candidate.updated_at = datetime.now()
+                if db_service.update_candidate(candidate):
+                    updated = True
+
+            # 2) 同步更新任务表（前端候选人列表基于 tasks 接口读取）
+            task_model = db_service.upload_repo.get_by_id(task_id)
+            if task_model:
+                task_model.category = new_category
+                task_model.updated_at = datetime.now()
+                if db_service.upload_repo.update(task_model):
+                    updated = True
+
+            if updated:
+                success_count += 1
+            else:
+                fail_count += 1
+        except Exception as e:
+            logger.warning(f"更新候选人分类失败 task_id={task_id}: {e}")
+            fail_count += 1
+
+    return {
+        "message": f"分类更新完成：成功 {success_count} 条，失败 {fail_count} 条",
+        "success": success_count,
+        "failed": fail_count,
+    }
+
+
 @router.get("/{candidate_id}", response_model=Dict[str, Any], summary="获取候选人详情")
 async def get_candidate(candidate_id: int):
     """
@@ -344,7 +396,10 @@ async def delete_candidate(candidate_id: int):
 
 
 @router.post("/import-excel", summary="从 Excel 批量导入候选人")
-async def import_candidates_from_excel(file: UploadFile = File(...)):
+async def import_candidates_from_excel(
+    file: UploadFile = File(...),
+    category: Optional[str] = Query(None, description="职位分类")
+):
     """
     从 Excel 文件批量导入候选人（轻量导入，不走简历解析）。
 
@@ -414,7 +469,8 @@ async def import_candidates_from_excel(file: UploadFile = File(...)):
                     other=notes_text,
                 )
                 db_service.update_task_status(
-                    task_id, TaskStatus.COMPLETED, progress=100, result=resume_info
+                    task_id, TaskStatus.COMPLETED, progress=100, result=resume_info,
+                    category=category
                 )
                 success_count += 1
             except Exception as e:

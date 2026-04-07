@@ -4,8 +4,9 @@
 import logging
 import os
 import uuid
+from typing import Optional
 from urllib.parse import quote
-from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Query, Form
 from fastapi.responses import Response
 from app.core.config import settings
 from app.models.resume import UploadResponse, UploadTask, TaskStatus
@@ -22,7 +23,8 @@ router = APIRouter()
 async def upload_resume(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="简历文件"),
-    force_update: bool = Query(False, description="是否强制更新已存在的候选人")
+    force_update: bool = Query(False, description="是否强制更新已存在的候选人"),
+    category: Optional[str] = Form(None, description="职位分类")
 ):
     """
     上传简历文件并开始解析
@@ -67,14 +69,15 @@ async def upload_resume(
             file_path=file_path,
             file_size=file.size,
             file_type=file.content_type,
-            status=TaskStatus.UPLOADED
+            status=TaskStatus.UPLOADED,
+            category=category
         )
-        
+
         await task_service.create_task(task)
-        
-        # 后台处理文件解析，传递force_update参数
+
+        # 后台处理文件解析，传递force_update和category参数
         resume_service = ResumeService()
-        background_tasks.add_task(resume_service.process_resume, task_id, force_update)
+        background_tasks.add_task(resume_service.process_resume, task_id, force_update, category)
         
         return UploadResponse(
             task_id=task_id,

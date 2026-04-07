@@ -19,11 +19,11 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
     def create(self, model: UploadTaskModel) -> bool:
         """创建任务记录"""
         sql = f"""
-        INSERT INTO {self.table_name} 
+        INSERT INTO {self.table_name}
         (id, filename, file_path, file_size, file_type, status, progress,
-         result, error, original_markdown, processed_data,
+         result, error, original_markdown, processed_data, category,
          created_at, updated_at, completed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         try:
             self.connection.execute_update(sql, model.to_tuple())
@@ -61,10 +61,10 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
     def update(self, model: UploadTaskModel) -> bool:
         """更新任务"""
         sql = f"""
-        UPDATE {self.table_name} 
-        SET filename = ?, file_path = ?, file_size = ?, file_type = ?, 
+        UPDATE {self.table_name}
+        SET filename = ?, file_path = ?, file_size = ?, file_type = ?,
             status = ?, progress = ?, result = ?, error = ?,
-            original_markdown = ?, processed_data = ?,
+            original_markdown = ?, processed_data = ?, category = ?,
             updated_at = ?, completed_at = ?
         WHERE id = ?
         """
@@ -72,7 +72,7 @@ class UploadTaskRepository(BaseRepository[UploadTaskModel]):
             params = (
                 model.filename, model.file_path, model.file_size, model.file_type,
                 model.status, model.progress, model.result, model.error,
-                model.original_markdown, model.processed_data,
+                model.original_markdown, model.processed_data, model.category,
                 model.updated_at.isoformat() if model.updated_at else None,
                 model.completed_at.isoformat() if model.completed_at else None,
                 model.id

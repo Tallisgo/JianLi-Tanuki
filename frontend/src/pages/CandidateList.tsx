@@ -9,7 +9,8 @@ import {
     Row,
     Col,
     message,
-    Spin
+    Spin,
+    Modal
 } from 'antd';
 import {
     SearchOutlined,
@@ -20,7 +21,8 @@ import {
     DownloadOutlined,
     ReloadOutlined,
     UploadOutlined,
-    FileExcelOutlined
+    FileExcelOutlined,
+    SwapOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { apiService, type Candidate } from '../services/api';
@@ -47,6 +49,11 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
     const [uploadModalVisible, setUploadModalVisible] = useState(false);
     const [batchUploadModalVisible, setBatchUploadModalVisible] = useState(false);
     const [isBackgroundParsing, setIsBackgroundParsing] = useState(false);
+    const [categoryAssignModalVisible, setCategoryAssignModalVisible] = useState(false);
+    const [assignCategory, setAssignCategory] = useState<string>('');
+    const [assignSelectedKeys, setAssignSelectedKeys] = useState<React.Key[]>([]);
+    const [assignLoading, setAssignLoading] = useState(false);
+    const [recentAssignedTaskIds, setRecentAssignedTaskIds] = useState<string[]>([]);
 
     // 默认职位分类配置
     const defaultPositionCategories = [
@@ -121,8 +128,12 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
         if (category && categoryMap[category]) {
             const categoryName = categoryMap[category];
             const filtered = candidates.filter(candidate => {
+                // 优先匹配持久化的 category 字段
+                if (candidate.category) {
+                    return candidate.category === categoryName;
+                }
+                // 兼容旧数据：关键词匹配 position
                 if (!candidate.position) return categoryName === '其他职位';
-
                 const position = candidate.position.toLowerCase();
                 const keywords = getCategoryKeywords(categoryName);
                 return keywords.some(keyword => position.includes(keyword.toLowerCase()));
@@ -438,11 +449,21 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
         onChange: setSelectedRowKeys,
     };
 
+    const isValidTaskId = (value: unknown): value is string => {
+        if (typeof value !== 'string') return false;
+        if (!value.trim()) return false;
+        return !value.startsWith('candidate-');
+    };
+
     // 判断候选人是否属于某个职位分类
     const matchesCategory = (candidate: Candidate, categoryName: string): boolean => {
         if (!categoryName) return true;
+        // 优先匹配持久化的 category 字段
+        if (candidate.category) {
+            return candidate.category === categoryName;
+        }
+        // 兼容旧数据：关键词匹配 position
         if (!candidate.position) return categoryName === '其他职位';
-
         const position = candidate.position.toLowerCase();
         const keywords = getCategoryKeywords(categoryName);
         return keywords.some(keyword => position.includes(keyword.toLowerCase()));
@@ -574,9 +595,12 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                                     input.onchange = async (e) => {
                                         const file = (e.target as HTMLInputElement).files?.[0];
                                         if (!file) return;
-                                        const hide = message.loading('正在导入...', 0);
+                                        // 获取当前分类名称
+                                        const categoryMap = buildCategoryMap();
+                                        const currentCategoryName = category ? categoryMap[category] : undefined;
+                                        const hide = message.loading('正在导入 Excel 文件，请稍候...', 0);
                                         try {
-                                            const res = await apiService.importCandidatesFromExcel(file);
+                                            const res = await apiService.importCandidatesFromExcel(file, currentCategoryName);
                                             hide();
                                             message.success(res.message);
                                             if (res.errors?.length) {
@@ -628,6 +652,17 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                             >
                                 批量删除
                             </Button>
+                            <Button
+                                icon={<SwapOutlined />}
+                                onClick={() => {
+                                    setAssignSelectedKeys([...selectedRowKeys]);
+                                    setAssignCategory('');
+                                    setCategoryAssignModalVisible(true);
+                                }}
+                                size="small"
+                            >
+                                分配岗位
+                            </Button>
                         </Space>
                     </Col>
                 </Row>
@@ -651,7 +686,12 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                         columns={columns}
                         dataSource={finalFilteredCandidates}
                         rowSelection={rowSelection}
-                        rowKey={(record) => record._tableKey || record.id || `candidate-${record.name || 'unknown'}`}
+                        rowKey={(record: any) => record._tableKey || record.id || `candidate-${record.name || 'unknown'}`}
+                        onRow={(record: any) => ({
+                            style: recentAssignedTaskIds.includes(record.id)
+                                ? { backgroundColor: 'rgba(24, 144, 255, 0.12)' }
+                                : {}
+                        })}
                         size="small"
                         scroll={{ y: 'calc(100vh - 280px)' }}
                         pagination={{
@@ -715,6 +755,143 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                 }}
                 defaultCategory={category}
             />
+
+            {/* 分配岗位模态框 */}
+            <Modal
+                title="分配岗位"
+                open={categoryAssignModalVisible}
+                width={600}
+                onOk={async () => {
+                    if (!assignCategory) {
+                        message.warning('请选择目标岗位');
+                        return;
+                    }
+                    if (assignSelectedKeys.length === 0) {
+                        message.warning('请勾选需要分配的候选人');
+                        return;
+                    }
+                    const validTaskIds = assignSelectedKeys
+                        .map((key) => String(key))
+                        .filter(isValidTaskId);
+                    if (validTaskIds.length === 0) {
+                        message.warning('所选候选人缺少有效任务ID，无法分配岗位');
+                        return;
+                    }
+                    setAssignLoading(true);
+                    try {
+                        const res = await apiService.batchUpdateCategory(
+                            validTaskIds,
+                            assignCategory
+                        );
+                        message.success(res.message);
+                        setRecentAssignedTaskIds(validTaskIds);
+                        window.setTimeout(() => {
+                            setRecentAssignedTaskIds([]);
+                        }, 6000);
+                        setSelectedRowKeys([]);
+                        setCategoryAssignModalVisible(false);
+                        setAssignCategory('');
+                        setAssignSelectedKeys([]);
+                        loadCandidates();
+                    } catch (err: any) {
+                        message.error(err.message || '分配失败');
+                    } finally {
+                        setAssignLoading(false);
+                    }
+                }}
+                onCancel={() => {
+                    setCategoryAssignModalVisible(false);
+                    setAssignCategory('');
+                    setAssignSelectedKeys([]);
+                }}
+                okText={`确认分配 (${assignSelectedKeys.length} 人)`}
+                okButtonProps={{ disabled: !assignCategory || assignSelectedKeys.length === 0, loading: assignLoading }}
+                cancelText="取消"
+            >
+                <div style={{ marginBottom: 12 }}>
+                    <div style={{ marginBottom: 8, fontWeight: 500 }}>目标岗位：</div>
+                    <Select
+                        placeholder="选择岗位分类"
+                        style={{ width: '100%' }}
+                        value={assignCategory || undefined}
+                        onChange={(val) => setAssignCategory(val)}
+                    >
+                        {getPositionCategories().map((cat: { id: string; name: string; color: string }) => (
+                            <Option key={cat.id} value={cat.name}>
+                                <span style={{ color: cat.color || 'var(--text-primary)' }}>{cat.name}</span>
+                            </Option>
+                        ))}
+                    </Select>
+                </div>
+                <div>
+                    <div style={{ marginBottom: 8, fontWeight: 500, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>选择候选人：</span>
+                        <Space size="small">
+                            <Button
+                                type="link"
+                                size="small"
+                                onClick={() => {
+                                    const uncategorized = finalFilteredCandidates
+                                        .filter(c => !c.category)
+                                        .map(c => c.id)
+                                        .filter(isValidTaskId);
+                                    setAssignSelectedKeys(uncategorized);
+                                }}
+                            >
+                                选择未分配
+                            </Button>
+                            <Button
+                                type="link"
+                                size="small"
+                                onClick={() => setAssignSelectedKeys(
+                                    finalFilteredCandidates
+                                        .map(c => c.id)
+                                        .filter(isValidTaskId)
+                                )}
+                            >
+                                全选
+                            </Button>
+                            <Button
+                                type="link"
+                                size="small"
+                                onClick={() => setAssignSelectedKeys([])}
+                            >
+                                清空
+                            </Button>
+                        </Space>
+                    </div>
+                    <div style={{ maxHeight: 300, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 6, padding: 4 }}>
+                        <Table
+                            size="small"
+                            dataSource={finalFilteredCandidates}
+                            rowKey={(record) => record._tableKey || record.id}
+                            rowSelection={{
+                                selectedRowKeys: assignSelectedKeys,
+                                onChange: (keys) => setAssignSelectedKeys(keys),
+                            }}
+                            columns={[
+                                { title: '姓名', dataIndex: 'name', key: 'name', width: 100 },
+                                {
+                                    title: '职位',
+                                    key: 'position',
+                                    render: (record: any) => record.position || '未提供',
+                                    width: 150,
+                                },
+                                {
+                                    title: '已分配岗位',
+                                    key: 'category',
+                                    render: (record: any) => record.category
+                                        ? <span>{record.category}</span>
+                                        : <span style={{ color: 'var(--text-secondary)' }}>未分配</span>,
+                                    width: 120,
+                                },
+                            ]}
+                            pagination={false}
+                            scroll={{ y: 250 }}
+                        />
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

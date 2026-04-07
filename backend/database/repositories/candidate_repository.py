@@ -18,11 +18,11 @@ class CandidateRepository(BaseRepository[CandidateModel]):
     def create(self, model: CandidateModel) -> bool:
         """创建候选人记录"""
         sql = f"""
-        INSERT INTO {self.table_name} 
-        (task_id, name, phone, email, address, position, experience_years, 
-         education_level, school, major, skills, languages, certifications, 
+        INSERT INTO {self.table_name}
+        (task_id, name, phone, email, address, position, category, experience_years,
+         education_level, school, major, skills, languages, certifications,
          summary, status, notes, rating, tags, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         try:
             self.connection.execute_update(sql, model.to_tuple())
@@ -72,18 +72,18 @@ class CandidateRepository(BaseRepository[CandidateModel]):
     def update(self, model: CandidateModel) -> bool:
         """更新候选人"""
         sql = f"""
-        UPDATE {self.table_name} 
-        SET task_id = ?, name = ?, phone = ?, email = ?, address = ?, 
-            position = ?, experience_years = ?, education_level = ?, 
-            school = ?, major = ?, skills = ?, languages = ?, 
-            certifications = ?, summary = ?, status = ?, notes = ?, 
+        UPDATE {self.table_name}
+        SET task_id = ?, name = ?, phone = ?, email = ?, address = ?,
+            position = ?, category = ?, experience_years = ?, education_level = ?,
+            school = ?, major = ?, skills = ?, languages = ?,
+            certifications = ?, summary = ?, status = ?, notes = ?,
             rating = ?, tags = ?, updated_at = ?
         WHERE id = ?
         """
         try:
             params = (
                 model.task_id, model.name, model.phone, model.email, model.address,
-                model.position, model.experience_years, model.education_level,
+                model.position, model.category, model.experience_years, model.education_level,
                 model.school, model.major, model.skills, model.languages,
                 model.certifications, model.summary, model.status, model.notes,
                 model.rating, model.tags, model.updated_at.isoformat() if model.updated_at else None,
@@ -366,7 +366,7 @@ class CandidateRepository(BaseRepository[CandidateModel]):
             logger.error(f"获取技能统计失败: {e}")
             return {}
     
-    def create_from_resume_info(self, task_id: str, resume_info: Dict[str, Any]) -> bool:
+    def create_from_resume_info(self, task_id: str, resume_info: Dict[str, Any], category: str = None) -> bool:
         """从简历信息创建候选人记录"""
         try:
             # 提取候选人相关信息
@@ -381,7 +381,8 @@ class CandidateRepository(BaseRepository[CandidateModel]):
                 "skills": resume_info.get("skills"),
                 "languages": resume_info.get("languages"),
                 "certifications": resume_info.get("certifications"),
-                "status": "active"
+                "status": "active",
+                "category": category
             }
             
             # 从工作经历中提取职位和经验
