@@ -847,19 +847,22 @@ class ApiService {
         }
     }
 
-    async importCandidatesFromExcel(file: File, category?: string): Promise<{
+    async importCandidatesFromExcel(file: File, category?: string, sheetName?: string, useLlm?: boolean): Promise<{
         message: string;
         success: number;
         skipped: number;
+        llm_pending?: number;
         errors: string[];
     }> {
         const formData = new FormData();
         formData.append('file', file);
 
-        let url = `${API_BASE_URL}/candidates/import-excel`;
-        if (category) {
-            url += `?category=${encodeURIComponent(category)}`;
-        }
+        const params = new URLSearchParams();
+        if (category) params.set('category', category);
+        if (sheetName) params.set('sheet_name', sheetName);
+        if (useLlm) params.set('use_llm', 'true');
+        const qs = params.toString();
+        const url = `${API_BASE_URL}/candidates/import-excel${qs ? `?${qs}` : ''}`;
 
         const response = await this.authFetch(url, {
             method: 'POST',
@@ -869,6 +872,23 @@ class ApiService {
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
             throw new Error(err.detail || '导入失败');
+        }
+
+        return response.json();
+    }
+
+    async getExcelSheets(file: File): Promise<{ sheets: string[] }> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await this.authFetch(`${API_BASE_URL}/candidates/import-excel/sheets`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || '读取工作表失败');
         }
 
         return response.json();

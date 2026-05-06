@@ -156,6 +156,12 @@ class ResumeParser:
             logger.error(f"解析文件失败 {file_path}: {e}")
             raise
 
+    async def parse_text(self, text: str) -> ResumeInfo:
+        """直接解析纯文本（如候选人备注），通过 LLM 提取结构化信息"""
+        if not text or not text.strip():
+            raise ValueError("文本内容为空")
+        return await self._complete_json(text)
+
     # ------------------------------------------------------------------
     # 文档转文本：markitdown 主路径 + OCR 降级
     # ------------------------------------------------------------------
