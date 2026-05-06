@@ -10,7 +10,8 @@ import {
     Col,
     message,
     Spin,
-    Modal
+    Modal,
+    Switch
 } from 'antd';
 import {
     SearchOutlined,
@@ -54,6 +55,12 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
     const [assignSelectedKeys, setAssignSelectedKeys] = useState<React.Key[]>([]);
     const [assignLoading, setAssignLoading] = useState(false);
     const [recentAssignedTaskIds, setRecentAssignedTaskIds] = useState<string[]>([]);
+    const [excelSheetModalVisible, setExcelSheetModalVisible] = useState(false);
+    const [excelSheetList, setExcelSheetList] = useState<string[]>([]);
+    const [excelSelectedSheet, setExcelSelectedSheet] = useState<string | undefined>(undefined);
+    const [excelPendingFile, setExcelPendingFile] = useState<File | null>(null);
+    const [excelImportLoading, setExcelImportLoading] = useState(false);
+    const [excelUseLlm, setExcelUseLlm] = useState(false);
 
     // 默认职位分类配置
     const defaultPositionCategories = [
@@ -97,6 +104,31 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
             map[cat.key || cat.id] = cat.name;
         });
         return map;
+    };
+
+    const doExcelImport = async (file: File, sheetName?: string, useLlm?: boolean) => {
+        const categoryMap = buildCategoryMap();
+        const currentCategoryName = category ? categoryMap[category] : undefined;
+        const hide = message.loading('正在导入 Excel 文件，请稍候...', 0);
+        setExcelImportLoading(true);
+        try {
+            const res = await apiService.importCandidatesFromExcel(file, currentCategoryName, sheetName, useLlm);
+            hide();
+            message.success(res.message);
+            if (res.llm_pending && res.llm_pending > 0) {
+                message.info(`${res.llm_pending} 条记录正在后台进行 LLM 智能解析，稍后刷新可查看更新`);
+            }
+            if (res.errors?.length) {
+                message.warning(`${res.errors.length} 条导入异常，请查看控制台`);
+                console.warn('导入异常详情:', res.errors);
+            }
+            loadCandidates();
+        } catch (err: any) {
+            hide();
+            message.error(err.message || '导入失败');
+        } finally {
+            setExcelImportLoading(false);
+        }
     };
 
     // 加载候选人数据
@@ -595,22 +627,18 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                                     input.onchange = async (e) => {
                                         const file = (e.target as HTMLInputElement).files?.[0];
                                         if (!file) return;
-                                        // 获取当前分类名称
-                                        const categoryMap = buildCategoryMap();
-                                        const currentCategoryName = category ? categoryMap[category] : undefined;
-                                        const hide = message.loading('正在导入 Excel 文件，请稍候...', 0);
                                         try {
-                                            const res = await apiService.importCandidatesFromExcel(file, currentCategoryName);
+                                            const hide = message.loading('正在读取工作表...', 0);
+                                            const { sheets } = await apiService.getExcelSheets(file);
                                             hide();
-                                            message.success(res.message);
-                                            if (res.errors?.length) {
-                                                message.warning(`${res.errors.length} 条导入异常，请查看控制台`);
-                                                console.warn('导入异常详情:', res.errors);
-                                            }
-                                            loadCandidates();
+                                            setExcelPendingFile(file);
+                                            setExcelSheetList(sheets);
+                                            const defaultSheet = sheets.find(s => s === '完整');
+                                            setExcelSelectedSheet(defaultSheet);
+                                            setExcelUseLlm(false);
+                                            setExcelSheetModalVisible(true);
                                         } catch (err: any) {
-                                            hide();
-                                            message.error(err.message || '导入失败');
+                                            message.error(err.message || '读取文件失败');
                                         }
                                     };
                                     input.click();
@@ -890,6 +918,67 @@ const CandidateList: React.FC<CandidateListProps> = ({ category }) => {
                             scroll={{ y: 250 }}
                         />
                     </div>
+                </div>
+            </Modal>
+
+            {/* Excel 工作表选择模态框 */}
+            <Modal
+                title="导入 Excel"
+                open={excelSheetModalVisible}
+                confirmLoading={excelImportLoading}
+                onOk={async () => {
+                    if (!excelPendingFile) return;
+                    await doExcelImport(excelPendingFile, excelSelectedSheet, excelUseLlm);
+                    setExcelSheetModalVisible(false);
+                    setExcelPendingFile(null);
+                    setExcelSheetList([]);
+                    setExcelSelectedSheet(undefined);
+                    setExcelUseLlm(false);
+                }}
+                onCancel={() => {
+                    setExcelSheetModalVisible(false);
+                    setExcelPendingFile(null);
+                    setExcelSheetList([]);
+                    setExcelSelectedSheet(undefined);
+                    setExcelUseLlm(false);
+                }}
+                okText="开始导入"
+                cancelText="取消"
+            >
+                {excelSheetList.length > 1 && (
+                    <div style={{ marginBottom: 16 }}>
+                        <p style={{ marginBottom: 8 }}>
+                            该 Excel 文件包含 {excelSheetList.length} 个工作表，请选择要导入的工作表：
+                        </p>
+                        <Select
+                            style={{ width: '100%' }}
+                            placeholder="选择工作表（不选则使用默认活动表）"
+                            value={excelSelectedSheet}
+                            onChange={(v) => setExcelSelectedSheet(v)}
+                            allowClear
+                            showSearch
+                        >
+                            {excelSheetList.map((name) => (
+                                <Option key={name} value={name}>{name}</Option>
+                            ))}
+                        </Select>
+                    </div>
+                )}
+                {excelSheetList.length <= 1 && (
+                    <p style={{ marginBottom: 16 }}>
+                        即将导入文件: <strong>{excelPendingFile?.name}</strong>
+                    </p>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Switch
+                        checked={excelUseLlm}
+                        onChange={(checked) => setExcelUseLlm(checked)}
+                        size="small"
+                    />
+                    <span>LLM 智能解析备注列</span>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                        （自动提取薪资、教育、工作经历等结构化信息，耗时较长）
+                    </span>
                 </div>
             </Modal>
         </div>

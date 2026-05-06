@@ -2,16 +2,18 @@
 候选人管理API端点
 """
 import uuid
+import asyncio
 import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, BackgroundTasks
 from app.services.candidate_service import candidate_service
 from app.services.database_service import db_service
 from app.models.resume import (
-    ResumeInfo, ContactInfo, TaskStatus, UploadTask,
+    ResumeInfo, ContactInfo, WorkExperience, TaskStatus, UploadTask,
 )
+from app.utils.resume_parser import ResumeParser
 from database.models.candidate import CandidateModel
 
 logger = logging.getLogger(__name__)
@@ -397,13 +399,21 @@ async def delete_candidate(candidate_id: int):
 
 @router.post("/import-excel", summary="从 Excel 批量导入候选人")
 async def import_candidates_from_excel(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    category: Optional[str] = Query(None, description="职位分类")
+    category: Optional[str] = Query(None, description="职位分类"),
+    sheet_name: Optional[str] = Query(None, description="指定 Sheet 名称，默认使用活动工作表"),
+    use_llm: bool = Query(False, description="是否使用 LLM 解析备注列中的结构化信息"),
 ):
     """
     从 Excel 文件批量导入候选人（轻量导入，不走简历解析）。
 
-    Excel 格式要求：第一行为表头，包含「姓名」「电话」列，其余列内容合并写入备注。
+    Excel 格式要求：第一行为表头，包含「姓名」列。
+    支持智能识别「电话」「公司」「职位」列，其余列内容合并写入备注。
+    可通过 sheet_name 指定要导入的工作表。
+
+    当 use_llm=True 时，对含有备注信息的记录在后台使用 LLM 提取结构化数据
+    （如薪资、工作年限、教育背景等），解析完成后自动更新候选人记录。
     """
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="仅支持 .xlsx / .xls 格式")
@@ -414,41 +424,96 @@ async def import_candidates_from_excel(
 
         content = await file.read()
         wb = openpyxl.load_workbook(BytesIO(content), read_only=True)
-        ws = wb.active
+
+        if sheet_name:
+            if sheet_name not in wb.sheetnames:
+                wb.close()
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"未找到工作表「{sheet_name}」，可用工作表: {wb.sheetnames}"
+                )
+            ws = wb[sheet_name]
+        else:
+            ws = wb.active
 
         headers = [str(cell.value).strip() if cell.value else "" for cell in next(ws.iter_rows(min_row=1, max_row=1))]
         name_col = _find_col(headers, ["姓名", "名字", "name"])
         phone_col = _find_col(headers, ["电话", "手机", "phone", "tel"])
+        company_col = _find_col(headers, ["公司", "company", "企业", "单位"])
+        position_col = _find_col(headers, ["职位", "position", "title", "岗位", "职务"])
+
+        # 当公司和职位匹配到同一列（如"公司职位"），该列内容通常是混合描述，
+        # 应当作备注处理而非拆分
+        if company_col is not None and company_col == position_col:
+            company_col = None
+            position_col = None
 
         if name_col is None:
             raise HTTPException(status_code=400, detail="未找到「姓名」列，请检查表头")
 
+        mapped_cols = {name_col, phone_col, company_col, position_col} - {None}
         note_cols = [
             i for i in range(len(headers))
-            if i != name_col and i != phone_col and headers[i]
+            if i not in mapped_cols and headers[i]
         ]
 
         success_count = 0
         skip_count = 0
+        llm_pending_count = 0
         errors: List[str] = []
+        consecutive_empty = 0
+        llm_tasks: List[Dict[str, Any]] = []
 
         for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             row = list(row)
-            name = str(row[name_col]).strip() if name_col < len(row) and row[name_col] else ""
+
+            has_any_value = any(
+                v is not None and str(v).strip() for v in row
+            )
+            if not has_any_value:
+                consecutive_empty += 1
+                if consecutive_empty >= 10:
+                    break
+                skip_count += 1
+                continue
+            consecutive_empty = 0
+
+            name = str(row[name_col]).strip().strip("\xa0") if name_col < len(row) and row[name_col] else ""
             if not name:
                 skip_count += 1
                 continue
 
-            phone = str(row[phone_col]).strip() if phone_col is not None and phone_col < len(row) and row[phone_col] else None
-            if phone:
-                phone = phone.replace(".0", "")
+            phone_val = None
+            email_val = None
+            if phone_col is not None and phone_col < len(row) and row[phone_col]:
+                raw_phone = str(row[phone_col]).strip().strip("\xa0")
+                raw_phone = raw_phone.replace(".0", "")
+                if raw_phone:
+                    if "@" in raw_phone:
+                        email_val = raw_phone
+                    else:
+                        phone_val = raw_phone
+
+            company_val = None
+            if company_col is not None and company_col < len(row) and row[company_col]:
+                company_val = str(row[company_col]).strip().strip("\xa0") or None
+
+            position_val = None
+            if position_col is not None and position_col < len(row) and row[position_col]:
+                position_val = str(row[position_col]).strip().strip("\xa0") or None
 
             note_parts = []
             for ci in note_cols:
                 if ci < len(row) and row[ci]:
-                    val = str(row[ci]).strip()
+                    val = str(row[ci]).strip().strip("\xa0")
                     if val:
-                        note_parts.append(f"{headers[ci]}: {val}")
+                        label = headers[ci] if headers[ci] else f"列{ci+1}"
+                        note_parts.append(f"{label}: {val}")
+            for ci in range(len(headers), len(row)):
+                if row[ci] is not None:
+                    val = str(row[ci]).strip().strip("\xa0")
+                    if val:
+                        note_parts.append(val)
             notes_text = "\n".join(note_parts) if note_parts else None
 
             try:
@@ -463,15 +528,51 @@ async def import_candidates_from_excel(
                 )
                 db_service.create_task(task)
 
-                resume_info = ResumeInfo(
-                    name=name,
-                    contact=ContactInfo(phone=phone) if phone else None,
-                    other=notes_text,
-                )
-                db_service.update_task_status(
-                    task_id, TaskStatus.COMPLETED, progress=100, result=resume_info,
-                    category=category
-                )
+                if use_llm and notes_text:
+                    basic_resume = ResumeInfo(
+                        name=name,
+                        contact=ContactInfo(phone=phone_val, email=email_val) if (phone_val or email_val) else None,
+                        experience=[WorkExperience(company=company_val, title=position_val)] if (company_val or position_val) else None,
+                        other=notes_text,
+                    )
+                    db_service.update_task_status(
+                        task_id, TaskStatus.COMPLETED, progress=100,
+                        result=basic_resume, category=category
+                    )
+                    llm_tasks.append({
+                        "task_id": task_id,
+                        "name": name,
+                        "phone": phone_val,
+                        "email": email_val,
+                        "company": company_val,
+                        "position": position_val,
+                        "notes": notes_text,
+                        "category": category,
+                    })
+                    llm_pending_count += 1
+                else:
+                    experience_list = None
+                    if company_val or position_val:
+                        experience_list = [WorkExperience(
+                            company=company_val,
+                            title=position_val,
+                        )]
+
+                    contact = None
+                    if phone_val or email_val:
+                        contact = ContactInfo(phone=phone_val, email=email_val)
+
+                    resume_info = ResumeInfo(
+                        name=name,
+                        contact=contact,
+                        experience=experience_list,
+                        other=notes_text,
+                    )
+                    db_service.update_task_status(
+                        task_id, TaskStatus.COMPLETED, progress=100,
+                        result=resume_info, category=category
+                    )
+
                 success_count += 1
             except Exception as e:
                 logger.warning("导入第 %d 行失败: %s", row_idx, e)
@@ -479,10 +580,18 @@ async def import_candidates_from_excel(
 
         wb.close()
 
+        if llm_tasks:
+            background_tasks.add_task(_process_llm_enrichment, llm_tasks)
+
+        msg = f"导入完成：成功 {success_count} 条，跳过 {skip_count} 条"
+        if llm_pending_count > 0:
+            msg += f"，其中 {llm_pending_count} 条正在后台进行 LLM 智能解析"
+
         return {
-            "message": f"导入完成：成功 {success_count} 条，跳过 {skip_count} 条",
+            "message": msg,
             "success": success_count,
             "skipped": skip_count,
+            "llm_pending": llm_pending_count,
             "errors": errors[:20],
         }
     except HTTPException:
@@ -490,6 +599,138 @@ async def import_candidates_from_excel(
     except Exception as e:
         logger.error("Excel 导入失败: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"导入失败: {str(e)}")
+
+
+async def _process_llm_enrichment(tasks: List[Dict[str, Any]], concurrency: int = 3):
+    """后台批量 LLM 解析候选人备注，提取结构化信息并更新记录"""
+    parser = ResumeParser()
+    semaphore = asyncio.Semaphore(concurrency)
+    total = len(tasks)
+    completed = 0
+    failed = 0
+
+    async def process_one(item: Dict[str, Any]):
+        nonlocal completed, failed
+        task_id = item["task_id"]
+        name = item["name"]
+        try:
+            async with semaphore:
+                text_parts = [f"姓名: {name}"]
+                if item.get("phone"):
+                    text_parts.append(f"电话: {item['phone']}")
+                if item.get("email"):
+                    text_parts.append(f"邮箱: {item['email']}")
+                if item.get("company"):
+                    text_parts.append(f"当前公司: {item['company']}")
+                if item.get("position"):
+                    text_parts.append(f"当前职位: {item['position']}")
+                text_parts.append(f"\n以下是关于该候选人的详细备注和沟通记录：\n{item['notes']}")
+
+                combined_text = "\n".join(text_parts)
+                enriched = await parser.parse_text(combined_text)
+
+                if enriched.contact is None and (item.get("phone") or item.get("email")):
+                    enriched.contact = ContactInfo(
+                        phone=item.get("phone"),
+                        email=item.get("email"),
+                    )
+                elif enriched.contact:
+                    if not enriched.contact.phone and item.get("phone"):
+                        enriched.contact.phone = item["phone"]
+                    if not enriched.contact.email and item.get("email"):
+                        enriched.contact.email = item["email"]
+
+                if not enriched.name:
+                    enriched.name = name
+
+                db_service.update_task_status(
+                    task_id, TaskStatus.COMPLETED, progress=100,
+                    result=enriched, category=item.get("category"),
+                )
+
+                candidate = db_service.get_candidate_by_task_id(task_id)
+                if candidate and enriched:
+                    _merge_llm_result_to_candidate(candidate, enriched)
+                    candidate.updated_at = datetime.now()
+                    db_service.update_candidate(candidate)
+
+                completed += 1
+                if completed % 10 == 0:
+                    logger.info("LLM 解析进度: %d/%d 完成", completed, total)
+
+        except Exception as e:
+            failed += 1
+            logger.warning("LLM 解析候选人 %s (task=%s) 失败: %s", name, task_id, e)
+
+    await asyncio.gather(*[process_one(t) for t in tasks])
+    logger.info("LLM 解析批次完成: %d/%d 成功, %d 失败", completed, total, failed)
+
+
+def _merge_llm_result_to_candidate(candidate: CandidateModel, enriched: ResumeInfo):
+    """将 LLM 解析出的结构化信息合并到已有候选人记录"""
+    import json
+
+    if enriched.name and not candidate.name:
+        candidate.name = enriched.name
+
+    if enriched.contact:
+        if enriched.contact.phone and not candidate.phone:
+            candidate.phone = enriched.contact.phone
+        if enriched.contact.email and not candidate.email:
+            candidate.email = enriched.contact.email
+        if enriched.contact.address and not candidate.address:
+            candidate.address = enriched.contact.address
+
+    if enriched.summary and not candidate.summary:
+        candidate.summary = enriched.summary
+
+    if enriched.experience:
+        latest = enriched.experience[0]
+        if latest.title and not candidate.position:
+            candidate.position = latest.title
+
+    if enriched.education:
+        latest = enriched.education[0]
+        if latest.institution and not candidate.school:
+            candidate.school = latest.institution
+        if latest.major and not candidate.major:
+            candidate.major = latest.major
+        if latest.degree and not candidate.education_level:
+            candidate.education_level = latest.degree
+
+    if enriched.skills and not candidate.skills:
+        candidate.skills = json.dumps(enriched.skills, ensure_ascii=False)
+
+    if enriched.other:
+        existing_notes = candidate.notes or ""
+        if enriched.other not in existing_notes:
+            candidate.notes = (existing_notes + "\n" + enriched.other).strip() if existing_notes else enriched.other
+
+
+@router.post("/import-excel/sheets", summary="获取 Excel 文件的工作表列表")
+async def get_excel_sheets(
+    file: UploadFile = File(...),
+):
+    """
+    上传 Excel 文件后返回其中所有工作表名称，供前端选择。
+    """
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="仅支持 .xlsx / .xls 格式")
+
+    try:
+        import openpyxl
+        from io import BytesIO
+
+        content = await file.read()
+        wb = openpyxl.load_workbook(BytesIO(content), read_only=True)
+        sheets = wb.sheetnames
+        wb.close()
+        return {"sheets": sheets}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("读取 Excel 工作表失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"读取失败: {str(e)}")
 
 
 def _find_col(headers: List[str], candidates: List[str]) -> Optional[int]:
